@@ -1193,6 +1193,22 @@
         }
 
         if (bodyParts.length < 2) return '';
+        const safeTitle = (title || 'NOTICIA EXTRAÍDA').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return `<!DOCTYPE html><html><head><title>${safeTitle}</title></head><body><article><h1>${safeTitle}</h1>${bodyParts.join('\n')}</article></body></html>`;
+      }
+
+      function setExtractionProgress(visible, stepText = '', percent = 0) {
+        if (!el.extractionProgressBox) return;
+        if (!visible) {
+          el.extractionProgressBox.classList.add('hidden');
+          return;
+        }
+        el.extractionProgressBox.classList.remove('hidden');
+        if (stepText) el.extractionStepLabel.textContent = stepText;
+        el.extractionPercentLabel.textContent = `${Math.round(percent)}%`;
+        el.extractionProgressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+      }
+
       // Sondeo paralelo multi-proxy (HTML completo + AMP + Jina Reader + Archivo Histórico Wayback)
       async function fetchHtmlWithProxyCascade(targetUrl) {
         const runWithTimeout = async (name, fn, timeoutMs = 9500) => {
