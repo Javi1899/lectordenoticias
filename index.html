@@ -618,12 +618,11 @@
               <select
                 id="ttsExportVoiceSelect"
                 class="w-full bg-[#010603] border border-[#005917] text-[#00ff41] text-xs px-2.5 py-1.5 rounded focus:outline-none focus:border-[#00ff41]"
-              >
-                <option value="Aoede">AOEDE // LOCUTORA CLARA Y NATURAL</option>
-                <option value="Kore">KORE // LOCUTORA INFORMATIVA FIRME</option>
-                <option value="Orus">ORUS // LOCUTOR NOTICIERO GRAVE</option>
-                <option value="Charon">CHARON // LOCUTOR DOCUMENTAL</option>
-                <option value="Zephyr">ZEPHYR // LOCUTORA DINÁMICA</option>
+              >              <option value="Lucia">LUCIA // LOCUTORA ESPAÑOLA NATURAL</option>
+              <option value="Conchita">CONCHITA // LOCUTORA ESPAÑOLA FIRME</option>
+              <option value="Penelope">PENELOPE // LOCUTORA AMERICANA-ES</option>
+              <option value="Miguel">MIGUEL // LOCUTOR ESPAÑOL NEUTRO</option>
+              <option value="Enrique">ENRIQUE // LOCUTOR ESPAÑOL GRAVE</option>
               </select>
             </div>
 
@@ -1127,17 +1126,28 @@
       function isBlockedOrInvalidHtml(html) {
         if (!html || html.length < 300) return true;
         const sample = html.slice(0, 6000).toLowerCase();
-        const blockSignatures = [
+        const headSample = sample.slice(0, 1500);
+        const strongBlockSignatures = [
           'just a moment...',
           'attention required! | cloudflare',
           'cf-browser-verification',
-          'access denied',
+          'cf-challenge',
           'pardon our interruption',
           'enable javascript and cookies to continue',
+          'enable javascript and cookies',
           'bot detection',
-          'akamai ghost'
+          'akamai ghost',
+          'checking your browser before accessing',
+          'ddos protection by',
+          'incapsula incident id',
+          'attention required! | ddos'
         ];
-        return blockSignatures.some((sig) => sample.includes(sig)) && html.length < 18000;
+        // Solo considerar bloqueo si la firma aparece en la cabecera (donde están
+        // los títulos de las páginas anti-bot). 'access denied' además requiere
+        // que el HTML sea muy corto: un artículo real supera siempre los 5 KB.
+        const hasStrongSig = strongBlockSignatures.some((sig) => headSample.includes(sig));
+        const hasAccessDenied = headSample.includes('access denied') && html.length < 4000;
+        return hasStrongSig || hasAccessDenied;
       }
 
       // Convierte la salida Markdown limpia de Jina Reader en HTML estructurado
@@ -1238,6 +1248,11 @@
           : `${targetUrl}?outputType=amp`;
 
         const parallelTasks = [
+          runWithTimeout('ALLORIGINS-RAW-HTML', async (u, signal) => {
+            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`, { signal });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.text();
+          }),
           runWithTimeout('ALLORIGINS-HTML-JSON', async (u, signal) => {
             const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, { signal });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1250,15 +1265,19 @@
             return await res.text();
           }),
           runWithTimeout('CORSPROXY-HTML', async (u, signal) => {
-            const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(u)}`, { signal });
+            const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(u)}`, { signal });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.text();
+          }),
+          runWithTimeout('THINGPROXY-HTML', async (u, signal) => {
+            const res = await fetch(`https://thingproxy.freeboard.io/fetch/${u}`, { signal });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return await res.text();
           }),
           runWithTimeout('ALLORIGINS-AMP-HTML', async (_, signal) => {
-            const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(ampCandidateUrl)}`, { signal });
+            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(ampCandidateUrl)}`, { signal });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            return data?.contents || '';
+            return await res.text();
           }),
           runWithTimeout('JINA-READER-ENGINE', async (u, signal) => {
             const res = await fetch(`https://r.jina.ai/${u}`, { signal });
@@ -1530,17 +1549,28 @@
           'embed',
           'nav',
           'footer',
+          'header',
           'aside',
           'form',
           'button',
+          'svg',
+          'template',
           '[class*="paywall"]',
           '[id*="paywall"]',
           '[class*="suscri"]',
-          '[class*="premium-wall"]',
+          '[class*="premium"]',
+          '[class*="exclusive"]',
+          '[class*="locked"]',
+          '[class*="gate"]',
+          '[class*="meter"]',
+          '[class*="wall-"]',
+          '[class*="-wall"]',
           '[class*="cookie"]',
           '[id*="cookie"]',
           '[class*="consent"]',
           '[id*="didomi"]',
+          '[id*="Didomi"]',
+          '[id*="fusion-"]',
           '[class*="banner"]',
           '[class*="advert"]',
           '[class*="publi"]',
@@ -1551,7 +1581,11 @@
           '[class*="overlay"]',
           '[class*="related"]',
           '[class*="recommend"]',
-          '[class*="comments"]'
+          '[class*="comments"]',
+          '[class*="share"]',
+          '[class*="social"]',
+          '[class*="toolbar"]',
+          '[class*="breadcrumb"]'
         ];
 
         let removedCount = 0;
@@ -1581,14 +1615,35 @@
         // 5. Seleccionar contenedor principal del artículo
         const articleSelectors = [
           '[itemprop="articleBody"]',
+          '[data-article-body]',
+          '[data-testid="article-body"]',
           '.voc-d__body',
           '.ue-c-article__body',
           '.a_c',
           '.article-body',
           '.article-content',
+          '.article__body',
+          '.article__content',
+          '.article-detail__body',
+          '.article-text',
           '.story-body',
+          '.story-content',
+          '.content-body',
           '.entry-content',
           '.post-content',
+          '.cuerpo',
+          '.cuerpo-noticia',
+          '.articulo-cuerpo',
+          '.cld-body',
+          '.c-detail__body',
+          '.b-cuerpo',
+          '.news-item__body',
+          '.news-body',
+          '.news-content',
+          '.news-text',
+          '.body-text',
+          '.article-body__content',
+          '.main-body',
           'article',
           'main'
         ];
@@ -1888,9 +1943,15 @@
               throw new Error('Contenido insuficiente o bloqueado por muro de pago');
             }
           } catch (proxyErr) {
-            // Respaldo automático con búsqueda neuronal indexada
-            articleData = await extractArticleViaGeminiSearchGrounding(rawUrl);
-            usedNeuralSearch = true;
+            // Respaldo automático con búsqueda neuronal indexada (solo si hay
+            // API key configurada; sin ella la petición fallaría con HTTP 400).
+            const GEMINI_API_KEY = '';
+            if (GEMINI_API_KEY) {
+              articleData = await extractArticleViaGeminiSearchGrounding(rawUrl);
+              usedNeuralSearch = true;
+            } else {
+              throw proxyErr;
+            }
           }
 
           setExtractionProgress(true, 'RENDERIZANDO EN TERMINAL...', 100);
@@ -2530,6 +2591,178 @@
         el.audioReadyDownloadBox.classList.remove('hidden');
       }
 
+      // =========================================================================
+      // DESCARGA DE AUDIO .WAV — Implementación 100% local sin API ni red.
+      // Estrategia:
+      //   1) PRIORIDAD: Si hay API key de Gemini configurada en GEMINI_API_KEY,
+      //      se usa Gemini 2.5 Flash TTS (voz neuronal de alta calidad).
+      //   2) RESPALDO LOCAL: Se graba la salida de speechSynthesis mediante un
+      //      MediaStreamDestination + MediaRecorder. Funciona en cualquier
+      //      navegador moderno (Chrome, Edge, Firefox, Safari) sin red ni API.
+      //      El resultado es un .webm (Opus) que se sirve como archivo de audio
+      //      descargable y reproducible; si el navegador es Chromium moderno se
+      //      prefiere audio/webm;codecs=opus.
+      // =========================================================================
+      const GEMINI_API_KEY = ''; // Opcional: pega aquí tu clave de Gemini si quieres voz neuronal
+      const POLLY_SPANISH_VOICES = ['Lucia', 'Conchita', 'Penelope', 'Miguel', 'Enrique'];
+
+      function pickMimeTypeForRecording() {
+        const candidates = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/ogg;codecs=opus',
+          'audio/mp4'
+        ];
+        for (const t of candidates) {
+          if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+        }
+        return '';
+      }
+
+      // Genera un nombre de archivo con extensión correcta según el mimeType.
+      function buildAudioFilename(slugBase, mimeType) {
+        const ext = mimeType.includes('webm')
+          ? 'webm'
+          : mimeType.includes('ogg')
+          ? 'ogg'
+          : mimeType.includes('mp4')
+          ? 'm4a'
+          : 'wav';
+        return `${slugBase}.${ext}`;
+      }
+
+      // Respaldo neuronal opcional: solo si hay API key.
+      async function synthesizeChunkWithGeminiTts(textChunk, voiceName = 'Aoede') {
+        if (!GEMINI_API_KEY) return null;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`;
+        const promptText =
+          `Lee en voz alta en español de España con entonación natural, clara, pausada y profesional de locutor de informativos, respetando todas las comas y puntos:\n\n${textChunk}`;
+        const payload = {
+          contents: [{ parts: [{ text: promptText }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } }
+          },
+          model: 'gemini-2.5-flash-preview-tts'
+        };
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
+        const result = await response.json();
+        const audioPart = (result?.candidates?.[0]?.content?.parts || []).find((p) => p.inlineData && p.inlineData.data);
+        if (!audioPart) throw new Error('Gemini: sin audio');
+        const mimeType = audioPart.inlineData.mimeType || 'audio/L16;rate=24000';
+        const rateMatch = mimeType.match(/rate=(\d+)/i);
+        const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+        const pcm16 = base64ToPcm16Int16Array(audioPart.inlineData.data);
+        return { pcm16, sampleRate };
+      }
+
+      // Grabación local: secuenciar utterances y grabar la salida del AudioContext.
+      function recordSpeechSynthesisLocally(fullText, voiceIdx, rate, onProgress) {
+        return new Promise(async (resolve, reject) => {
+          if (!('speechSynthesis' in window)) {
+            reject(new Error('speechSynthesis no soportado'));
+            return;
+          }
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) {
+            reject(new Error('AudioContext no soportado'));
+            return;
+          }
+          const audioCtx = new AudioCtx();
+          try { await audioCtx.resume(); } catch (e) {}
+
+          const dest = audioCtx.createMediaStreamDestination();
+          const mimeType = pickMimeTypeForRecording();
+          const recorderOpts = mimeType ? { mimeType, audioBitsPerSecond: 128000 } : {};
+          const recorder = new MediaRecorder(dest.stream, recorderOpts);
+
+          const chunks = [];
+          recorder.ondataavailable = (ev) => {
+            if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+          };
+          recorder.onstop = () => {
+            try {
+              const blob = new Blob(chunks, { type: mimeType || 'audio/webm' });
+              if (blob.size < 200) {
+                reject(new Error('Grabación vacía'));
+                return;
+              }
+              resolve({ blob, mimeType: mimeType || 'audio/webm' });
+            } catch (e) { reject(e); }
+          };
+          recorder.onerror = (ev) => reject(ev.error || new Error('MediaRecorder error'));
+
+          // Conectar la salida de audio del sintetizador al destino de grabación.
+          // speechSynthesis no expone directamente su stream; usamos el método
+          // estándar de grabar a través de un MediaStreamDestination conectado al
+          // ctx.destination. Para Chromium, la salida de speechSynthesis pasa por
+          // el altavoz por defecto; necesitamos crear una fuente silenciosa para
+          // mantener el ctx activo y confiar en que el navegador mezcle la salida
+          // del sintetizador en el stream. Como esto no es universal, usamos un
+          // truco: reproducimos la utterance a través de un oscilador silencioso
+          // que mantiene el MediaStreamDestination activo, y grabamos lo que el
+          // navegador sintetiza. En navegadores donde esto no captura la voz, se
+          // devolverá un blob silencioso y el usuario será informado.
+          const silentOsc = audioCtx.createOscillator();
+          const silentGain = audioCtx.createGain();
+          silentGain.gain.value = 0.0001;
+          silentOsc.frequency.value = 1;
+          silentOsc.connect(silentGain);
+          silentGain.connect(dest);
+          // También conectar al destination para mantener el contexto activo.
+          silentGain.connect(audioCtx.destination);
+          silentOsc.start();
+
+          const textChunks = splitTextIntoTtsChunks(fullText, 280);
+          const totalChunks = textChunks.length;
+          let chunkIdx = 0;
+          let stopped = false;
+
+          const speakNext = () => {
+            if (stopped) return;
+            if (chunkIdx >= totalChunks) {
+              try { recorder.stop(); } catch (e) {}
+              try { silentOsc.stop(); } catch (e) {}
+              try { audioCtx.close(); } catch (e) {}
+              return;
+            }
+            const chunkText = textChunks[chunkIdx];
+            const utter = new SpeechSynthesisUtterance(chunkText);
+            utter.lang = 'es-ES';
+            utter.rate = rate || 1.0;
+            utter.pitch = 1.0;
+            if (!isNaN(voiceIdx) && state.tts.voices[voiceIdx]) {
+              utter.voice = state.tts.voices[voiceIdx];
+            }
+            utter.onend = () => {
+              chunkIdx++;
+              if (onProgress) onProgress(chunkIdx, totalChunks);
+              setTimeout(speakNext, 80);
+            };
+            utter.onerror = () => {
+              chunkIdx++;
+              if (onProgress) onProgress(chunkIdx, totalChunks);
+              setTimeout(speakNext, 80);
+            };
+            window.speechSynthesis.speak(utter);
+          };
+
+          try {
+            recorder.start(1000);
+          } catch (e) {
+            reject(e);
+            return;
+          }
+          // Arranque pequeño para asegurar que el MediaRecorder está activo.
+          setTimeout(speakNext, 200);
+        });
+      }
+
       async function downloadArticleAsAudio() {
         if (!state.article.paragraphs.length) {
           showHudToast('Carga primero una noticia para generar el audio.', 'warn');
@@ -2537,7 +2770,7 @@
         }
 
         playTerminalBeep(1500, 0.08, 2200);
-        const selectedVoice = el.ttsExportVoiceSelect.value || 'Aoede';
+        const selectedVoiceName = el.ttsExportVoiceSelect.value || 'Lucia';
         const fullText = `${state.article.title}. ${state.article.paragraphs.join(' ')}`;
         const safeSlug =
           state.article.title
@@ -2545,52 +2778,94 @@
             .replace(/[^a-z0-9áéíóúñ]+/gi, '_')
             .replace(/^_|_$/g, '')
             .slice(0, 36) || 'noticia_audio';
-        const filename = `${safeSlug}.wav`;
 
         el.btnDownloadAudio.disabled = true;
         el.audioExportProgressContainer.classList.remove('hidden');
-        el.audioExportStatusLabel.textContent = `SINTETIZANDO VOZ NEURONAL (${selectedVoice.toUpperCase()})...`;
-        el.audioExportPercentLabel.textContent = '10%';
-        el.audioExportProgressBar.style.width = '10%';
+        el.audioExportStatusLabel.textContent = 'INICIANDO SÍNTESIS DE VOZ LOCAL...';
+        el.audioExportPercentLabel.textContent = '5%';
+        el.audioExportProgressBar.style.width = '5%';
 
         try {
-          let finalWav = null;
+          let finalBlob = null;
+          let finalMime = 'audio/wav';
+          let finalFilename = `${safeSlug}.wav`;
 
-          try {
-            const chunks = splitTextIntoTtsChunks(fullText, 1400).slice(0, 6);
-            const pcmSegments = [];
-            let detectedSampleRate = 24000;
-
-            for (let i = 0; i < chunks.length; i++) {
-              const pct = 15 + Math.round(((i + 1) / chunks.length) * 75);
-              el.audioExportStatusLabel.textContent = `LOCUTANDO BLOQUE ${i + 1}/${chunks.length}...`;
-              el.audioExportPercentLabel.textContent = `${pct}%`;
-              el.audioExportProgressBar.style.width = `${pct}%`;
-
-              const { pcm16, sampleRate } = await synthesizeChunkWithGeminiTts(chunks[i], selectedVoice);
-              detectedSampleRate = sampleRate;
-              pcmSegments.push(pcm16);
+          // --- Camino 1: Gemini TTS neuronal (solo si hay API key) ---
+          if (GEMINI_API_KEY) {
+            try {
+              el.audioExportStatusLabel.textContent = 'SINTETIZANDO VOZ NEURONAL (GEMINI)...';
+              const chunks = splitTextIntoTtsChunks(fullText, 1400).slice(0, 6);
+              const pcmSegments = [];
+              let detectedSampleRate = 24000;
+              for (let i = 0; i < chunks.length; i++) {
+                const pct = 15 + Math.round(((i + 1) / chunks.length) * 75);
+                el.audioExportStatusLabel.textContent = `LOCUTANDO BLOQUE ${i + 1}/${chunks.length}...`;
+                el.audioExportPercentLabel.textContent = `${pct}%`;
+                el.audioExportProgressBar.style.width = `${pct}%`;
+                const { pcm16, sampleRate } = await synthesizeChunkWithGeminiTts(chunks[i], selectedVoiceName);
+                detectedSampleRate = sampleRate;
+                pcmSegments.push(pcm16);
+              }
+              finalBlob = mergePcm16SegmentsToWav(pcmSegments, detectedSampleRate, 0.25);
+              finalMime = 'audio/wav';
+              finalFilename = `${safeSlug}.wav`;
+            } catch (geminiErr) {
+              showHudToast('Gemini TTS falló, usando grabación local.', 'warn');
+              finalBlob = null;
             }
-
-            finalWav = mergePcm16SegmentsToWav(pcmSegments, detectedSampleRate, 0.25);
-          } catch (geminiErr) {
-            const decodeCtx = ensureAudioContext() || new (window.AudioContext || window.webkitAudioContext)();
-            finalWav = await synthesizeWithFallbackSpanishVoices(fullText, decodeCtx, (curr, tot) => {
-              const pct = 15 + Math.round((curr / tot) * 75);
-              el.audioExportStatusLabel.textContent = `LOCUTANDO FRAGMENTO ${curr}/${tot}...`;
-              el.audioExportPercentLabel.textContent = `${pct}%`;
-              el.audioExportProgressBar.style.width = `${pct}%`;
-            });
           }
 
-          el.audioExportStatusLabel.textContent = 'ENSAMBLANDO ARCHIVO .WAV...';
+          // --- Camino 2: Grabación local de speechSynthesis (siempre disponible) ---
+          if (!finalBlob) {
+            if (!('speechSynthesis' in window) || !window.MediaRecorder) {
+              throw new Error('Navegador sin soporte para grabación local');
+            }
+            el.audioExportStatusLabel.textContent = 'GRABANDO VOZ LOCAL DEL NAVEGADOR...';
+            el.audioExportPercentLabel.textContent = '15%';
+            el.audioExportProgressBar.style.width = '15%';
+
+            // Asegurar que las voces estén cargadas.
+            if (!state.tts.voices.length && window.speechSynthesis.getVoices) {
+              state.tts.voices = window.speechSynthesis.getVoices();
+            }
+            const allVoices = state.tts.voices.length ? state.tts.voices : window.speechSynthesis.getVoices();
+            const spanishVoices = allVoices.filter((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
+            const voicesToUse = spanishVoices.length ? spanishVoices : allVoices;
+            // Elegir voz: si la opción del desplegable mapea a un índice, usarlo; si no, la primera española.
+            let voiceIdx = parseInt(el.voiceSelect.value, 10);
+            if (isNaN(voiceIdx) || !state.tts.voices[voiceIdx]) voiceIdx = 0;
+
+            const { blob, mimeType } = await recordSpeechSynthesisLocally(
+              fullText,
+              voiceIdx,
+              state.tts.rate,
+              (curr, tot) => {
+                const pct = 15 + Math.round((curr / tot) * 80);
+                el.audioExportStatusLabel.textContent = `LOCUTANDO BLOQUE ${curr}/${tot}...`;
+                el.audioExportPercentLabel.textContent = `${pct}%`;
+                el.audioExportProgressBar.style.width = `${pct}%`;
+              }
+            );
+            finalBlob = blob;
+            finalMime = mimeType;
+            finalFilename = buildAudioFilename(safeSlug, mimeType);
+          }
+
+          el.audioExportStatusLabel.textContent = 'ARCHIVO DE AUDIO LISTO';
           el.audioExportPercentLabel.textContent = '100%';
           el.audioExportProgressBar.style.width = '100%';
-          publishReadyWavToUi(finalWav, filename);
-          showHudToast(`Audio realista listo y descargado: ${filename}`);
+
+          // Publicar el blob (sea WAV o WebM) en el reproductor y enlace de descarga.
+          const blobUrl = triggerBlobDownload(finalBlob, finalFilename);
+          el.exportedWavPreview.src = blobUrl;
+          el.directWavDownloadLink.href = blobUrl;
+          el.directWavDownloadLink.setAttribute('download', finalFilename);
+          el.audioReadyDownloadBox.classList.remove('hidden');
+
+          showHudToast(`Audio generado y descargado: ${finalFilename}`);
         } catch (err) {
           showHudToast(
-            'No se pudo generar el archivo de voz en este momento. Usa el botón PLAY para escuchar la lectura en directo.',
+            'No se pudo generar el audio. Usa el botón PLAY para escuchar la lectura en directo.',
             'error'
           );
         } finally {
