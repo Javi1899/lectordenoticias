@@ -338,6 +338,16 @@
           </button>
 
           <button
+            id="btnOpenRemovePaywall"
+            type="button"
+            class="btn-matrix px-3 py-2 rounded text-xs font-bold flex items-center gap-1.5"
+            title="Abre la URL actual en removepaywall.co (salta el paywall desde el navegador real)"
+          >
+            <span>🔓</span>
+            <span>[ REMOVEPAYWALL ]</span>
+          </button>
+
+          <button
             id="btnDemo1"
             type="button"
             class="btn-matrix px-3 py-2 rounded text-xs font-bold flex items-center gap-1"
@@ -842,6 +852,7 @@
         btnPasteClipboard: document.getElementById('btnPasteClipboard'),
         btnOpenPasteModal: document.getElementById('btnOpenPasteModal'),
         btnOpenScriptModal: document.getElementById('btnOpenScriptModal'),
+        btnOpenRemovePaywall: document.getElementById('btnOpenRemovePaywall'),
         btnDemo1: document.getElementById('btnDemo1'),
         btnDemo2: document.getElementById('btnDemo2'),
         urlInput: document.getElementById('urlInput'),
@@ -3037,6 +3048,38 @@
           document.execCommand('copy');
           showHudToast('Script copiado al portapapeles.');
         } catch (e) {}
+      });
+
+      // Botón [ REMOVEPAYWALL ]: abre la URL actual en removepaywall.co en una
+      // pestaña nueva. RemovePaywall está protegido por Cloudflare, que bloquea
+      // cualquier fetch automatizado; por eso lo abrimos como pestaña nueva en
+      // el navegador real (donde Cloudflare ejecuta su desafío JS y deja
+      // pasar). Tras cargar, el usuario usa [ SCRIPT HTML ] para capturar el
+      // HTML ya desbloqueado y pegarlo en el Lector.
+      el.btnOpenRemovePaywall.addEventListener('click', () => {
+        const rawUrl = (el.urlInput.value || '').trim();
+        if (!rawUrl) {
+          showHudToast('Pega primero la URL de la noticia en el campo superior.', 'warn');
+          return;
+        }
+        let normalized = rawUrl;
+        try {
+          normalized = new URL(rawUrl).href;
+        } catch (e) {
+          showHudToast('La URL no parece válida. Revisa el formato (https://...).', 'warn');
+          return;
+        }
+        const removePaywallUrl = `https://removepaywall.co/search?url=${encodeURIComponent(normalized)}`;
+        const win = window.open(removePaywallUrl, '_blank', 'noopener,noreferrer');
+        if (!win) {
+          showHudToast('El navegador bloqueó la ventana. Permite pop-ups y reintenta.', 'error');
+          return;
+        }
+        playTerminalBeep(1500, 0.08, 2200);
+        showHudToast(
+          'Pestaña abierta en removepaywall.co. Espera ~5s a que cargue y luego pulsa [ SCRIPT HTML ] para capturarla.',
+          'success'
+        );
       });
 
       // Botones Demo 1 y Demo 2
