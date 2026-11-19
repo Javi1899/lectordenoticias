@@ -613,16 +613,17 @@
           <div class="pt-3 border-t border-[#005917] space-y-2.5">
             <div class="space-y-1">
               <label for="ttsExportVoiceSelect" class="text-[11px] text-[#008f11] tracking-wider block">
-                LOCUTOR PARA ARCHIVO DESCARGABLE (.WAV):
+                LOCUTOR REALISTA PARA ARCHIVO (.WAV):
               </label>
               <select
                 id="ttsExportVoiceSelect"
                 class="w-full bg-[#010603] border border-[#005917] text-[#00ff41] text-xs px-2.5 py-1.5 rounded focus:outline-none focus:border-[#00ff41]"
               >
-                <option value="Aoede">AOEDE // LOCUTORA CLARA (ES)</option>
-                <option value="Kore">KORE // LOCUTORA INFORMATIVA (ES)</option>
-                <option value="Orus">ORUS // LOCUTOR NOTICIARIO (ES)</option>
-                <option value="Charon">CHARON // LOCUTOR PROFUNDO (ES)</option>
+                <option value="Aoede">AOEDE // LOCUTORA CLARA Y NATURAL</option>
+                <option value="Kore">KORE // LOCUTORA INFORMATIVA FIRME</option>
+                <option value="Orus">ORUS // LOCUTOR NOTICIERO GRAVE</option>
+                <option value="Charon">CHARON // LOCUTOR DOCUMENTAL</option>
+                <option value="Zephyr">ZEPHYR // LOCUTORA DINÁMICA</option>
               </select>
             </div>
 
@@ -2222,13 +2223,25 @@
       // 8. EXPORTACIÓN DE AUDIO REALISTA A ARCHIVO .WAV Y DESCARGA DE FOTOS .ZIP
       // =========================================================================
       function base64ToArrayBuffer(base64) {
-        const binaryString = atob(base64);
+        const cleanB64 = base64.replace(/\s+/g, '');
+        const binaryString = atob(cleanB64);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
         for (let i = 0; i < len; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
         return bytes.buffer;
+      }
+
+      function base64ToPcm16Int16Array(base64) {
+        const cleanB64 = base64.replace(/\s+/g, '');
+        const binaryString = atob(cleanB64);
+        const evenLen = binaryString.length - (binaryString.length % 2);
+        const bytes = new Uint8Array(evenLen);
+        for (let i = 0; i < evenLen; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return new Int16Array(bytes.buffer);
       }
 
       // Conversión directa de audio PCM16 crudo a contenedor estándar WAV
@@ -2252,7 +2265,7 @@
         writeAscii(8, 'WAVE');
         writeAscii(12, 'fmt ');
         view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true); // PCM
+        view.setUint16(20, 1, true); // PCM lineal sin compresión
         view.setUint16(22, numChannels, true);
         view.setUint32(24, sampleRate, true);
         view.setUint32(28, byteRate, true);
@@ -2269,124 +2282,72 @@
         return new Blob([buffer], { type: 'audio/wav' });
       }
 
-      // Sintetizador vocal de formantes en español (genera voz hablada real en PCM16 .WAV sin depender de red)
-      function buildOfflineSpanishSpeechWavBlob(text) {
-        const sampleRate = 22050;
-        const cleanText = text
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9 .,;:!?ñ\n-]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 2600);
-
-        const vowelFormants = {
-          a: [730, 1090, 2440],
-          e: [530, 1840, 2480],
-          i: [270, 2290, 3010],
-          o: [570, 840, 2410],
-          u: [300, 870, 2240]
-        };
-
-        const tokens = [];
-        for (let i = 0; i < cleanText.length; i++) {
-          const ch = cleanText[i];
-          if ('aeiou'.includes(ch)) {
-            tokens.push({ type: 'vowel', ch, dur: 0.072 });
-          } else if (ch === '.' || ch === '!' || ch === '?' || ch === '\n') {
-            tokens.push({ type: 'pause', dur: 0.24 });
-          } else if (ch === ',' || ch === ';' || ch === ':') {
-            tokens.push({ type: 'pause', dur: 0.14 });
-          } else if (ch === ' ') {
-            tokens.push({ type: 'pause', dur: 0.042 });
-          } else if (/[a-zñ]/.test(ch)) {
-            const isFricative = 'sfzjxch'.includes(ch);
-            tokens.push({ type: isFricative ? 'fricative' : 'consonant', ch, dur: 0.036 });
-          }
-        }
-
-        const totalDuration = tokens.reduce((acc, t) => acc + t.dur, 0.2);
-        const totalSamples = Math.max(sampleRate, Math.floor(totalDuration * sampleRate));
-        const pcm16 = new Int16Array(totalSamples);
-
-        let sampleCursor = 0;
-        let lastFormants = vowelFormants.a;
-        let glottalPhase = 0;
-
-        tokens.forEach((tok, idx) => {
-          const count = Math.floor(tok.dur * sampleRate);
-          const progress = idx / Math.max(1, tokens.length);
-          const f0 = 148 - 22 * Math.sin(progress * Math.PI * 3);
-
-          if (tok.type === 'pause') {
-            sampleCursor += count;
-            return;
-          }
-
-          const targetFormants =
-            tok.type === 'vowel' ? vowelFormants[tok.ch] || vowelFormants.a : lastFormants;
-          if (tok.type === 'vowel') lastFormants = targetFormants;
-
-          for (let n = 0; n < count && sampleCursor < totalSamples; n++, sampleCursor++) {
-            const localEnv = Math.sin((n / count) * Math.PI);
-            const t = sampleCursor / sampleRate;
-
-            if (tok.type === 'fricative') {
-              const noise = (Math.random() * 2 - 1) * 0.28 * localEnv;
-              pcm16[sampleCursor] = Math.max(-32768, Math.min(32767, Math.floor(noise * 32767)));
-              continue;
-            }
-
-            glottalPhase += f0 / sampleRate;
-            if (glottalPhase >= 1) glottalPhase -= 1;
-            // Pulso glótico rico en armónicos
-            const glottal = (2 * glottalPhase - 1) * 0.5 + Math.sin(2 * Math.PI * glottalPhase) * 0.5;
-
-            const [f1, f2, f3] = targetFormants;
-            const vocalTract =
-              Math.sin(2 * Math.PI * f1 * t) * 0.52 +
-              Math.sin(2 * Math.PI * f2 * t) * 0.32 +
-              Math.sin(2 * Math.PI * f3 * t) * 0.16;
-
-            const gain = tok.type === 'vowel' ? 0.58 : 0.24;
-            const out = glottal * vocalTract * localEnv * gain;
-            pcm16[sampleCursor] = Math.max(-32768, Math.min(32767, Math.floor(out * 32767)));
-          }
-        });
-
-        return pcm16ToWavBlob(pcm16, sampleRate);
-      }
-
-      function splitTextIntoTtsChunks(text, maxLen = 1050) {
-        const sentences = text.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [text];
+      // Divide el texto en bloques coherentes respetando párrafos y oraciones
+      function splitTextIntoTtsChunks(text, maxLen = 1400) {
+        const clean = text.replace(/\s+/g, ' ').trim();
+        const sentences = clean.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) || [clean];
         const chunks = [];
         let current = '';
 
-        for (const s of sentences) {
-          if ((current + s).length > maxLen && current.trim().length > 0) {
+        for (const rawSentence of sentences) {
+          const s = rawSentence.trim();
+          if (!s) continue;
+          if (s.length > maxLen) {
+            if (current) {
+              chunks.push(current.trim());
+              current = '';
+            }
+            const subParts = s.match(new RegExp(`.{1,${maxLen}}(?:\\s|$)`, 'g')) || [s];
+            subParts.forEach((sp) => {
+              if (sp.trim()) chunks.push(sp.trim());
+            });
+            continue;
+          }
+
+          if ((current + ' ' + s).trim().length > maxLen && current.length > 0) {
             chunks.push(current.trim());
             current = s;
           } else {
-            current += s;
+            current = current ? `${current} ${s}` : s;
           }
         }
         if (current.trim().length > 0) chunks.push(current.trim());
         return chunks;
       }
 
-      async function synthesizeChunkWithGeminiTts(textChunk, voiceName = 'Aoede', retries = 2) {
+      // Une varios segmentos PCM16 en un único archivo .WAV con pausas naturales
+      function mergePcm16SegmentsToWav(segments, sampleRate = 24000, pauseSeconds = 0.25) {
+        const pauseSamples = Math.floor(sampleRate * pauseSeconds);
+        const totalSamples =
+          segments.reduce((acc, seg) => acc + seg.length, 0) +
+          Math.max(0, segments.length - 1) * pauseSamples;
+
+        const merged = new Int16Array(totalSamples);
+        let cursor = 0;
+
+        segments.forEach((seg, idx) => {
+          merged.set(seg, cursor);
+          cursor += seg.length;
+          if (idx < segments.length - 1) {
+            cursor += pauseSamples;
+          }
+        });
+
+        return pcm16ToWavBlob(merged, sampleRate);
+      }
+
+      // Motor Principal: Gemini 2.5 Flash TTS (Voz humana neuronal en español de alta fidelidad)
+      async function synthesizeChunkWithGeminiTts(textChunk, voiceName = 'Aoede') {
         const apiKey = '';
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+
+        const promptText =
+          `Lee en voz alta en español de España con entonación natural, clara, pausada y profesional de locutor de informativos, respetando todas las comas y puntos:\n\n${textChunk}`;
 
         const payload = {
           contents: [
             {
-              parts: [
-                {
-                  text: `Lee en español con voz natural, clara y profesional de locutor de informativos el siguiente texto:\n\n${textChunk}`
-                }
-              ]
+              parts: [{ text: promptText }]
             }
           ],
           generationConfig: {
@@ -2402,7 +2363,8 @@
           model: 'gemini-2.5-flash-preview-tts'
         };
 
-        for (let attempt = 0; attempt <= retries; attempt++) {
+        let lastError = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const response = await fetch(apiUrl, {
               method: 'POST',
@@ -2410,34 +2372,139 @@
               body: JSON.stringify(payload)
             });
 
+            if (response.status === 429 || response.status >= 500) {
+              await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+              continue;
+            }
+
             if (!response.ok) {
-              if (response.status === 400 || response.status === 403) {
-                attempt = retries;
-              }
-              throw new Error(`TTS HTTP ${response.status}`);
+              throw new Error(`HTTP ${response.status}`);
             }
 
             const result = await response.json();
             const parts = result?.candidates?.[0]?.content?.parts || [];
-            const part = parts.find((p) => p.inlineData && p.inlineData.data);
-            const audioData = part?.inlineData?.data;
-            const mimeType = part?.inlineData?.mimeType || 'audio/L16;rate=24000';
+            const audioPart = parts.find((p) => p.inlineData && p.inlineData.data);
 
-            if (audioData) {
-              const rateMatch = mimeType.match(/rate=(\d+)/);
-              const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-              const pcmBuffer = base64ToArrayBuffer(audioData);
-              return {
-                pcm16: new Int16Array(pcmBuffer),
-                sampleRate
-              };
+            if (!audioPart) {
+              throw new Error('Respuesta sin pista de audio');
             }
-            throw new Error('Respuesta sin audio');
+
+            const mimeType = audioPart.inlineData.mimeType || 'audio/L16;rate=24000';
+            const rateMatch = mimeType.match(/rate=(\d+)/i);
+            const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+            const pcm16 = base64ToPcm16Int16Array(audioPart.inlineData.data);
+
+            if (pcm16.length < 200) {
+              throw new Error('Pista PCM vacía');
+            }
+
+            return { pcm16, sampleRate };
           } catch (err) {
-            if (attempt === retries) throw err;
-            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+            lastError = err;
+            if (String(err.message).includes('HTTP 400') || String(err.message).includes('HTTP 403')) {
+              break;
+            }
+            await new Promise((r) => setTimeout(r, 800 * Math.pow(2, attempt)));
           }
         }
+        throw lastError || new Error('Gemini TTS no disponible');
+      }
+
+      // Fetch binario con tiempo límite para respaldo externo
+      async function fetchBinaryWithTimeout(url, options = {}, timeoutMs = 8500) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, { ...options, signal: controller.signal });
+          clearTimeout(timer);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res;
+        } catch (err) {
+          clearTimeout(timer);
+          throw err;
+        }
+      }
+
+      // Convierte un AudioBuffer decodificado a Int16Array a 24.000 Hz mediante interpolación lineal
+      function audioBufferToPcm16At24k(audioBuffer) {
+        const targetRate = 24000;
+        const srcData = audioBuffer.getChannelData(0);
+        const srcRate = audioBuffer.sampleRate;
+
+        if (srcRate === targetRate) {
+          const out = new Int16Array(srcData.length);
+          for (let i = 0; i < srcData.length; i++) {
+            const s = Math.max(-1, Math.min(1, srcData[i]));
+            out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+          }
+          return out;
+        }
+
+        const ratio = srcRate / targetRate;
+        const newLen = Math.floor(srcData.length / ratio);
+        const out = new Int16Array(newLen);
+        for (let i = 0; i < newLen; i++) {
+          const pos = i * ratio;
+          const idx0 = Math.floor(pos);
+          const idx1 = Math.min(srcData.length - 1, idx0 + 1);
+          const frac = pos - idx0;
+          const sample = srcData[idx0] * (1 - frac) + srcData[idx1] * frac;
+          const clamped = Math.max(-1, Math.min(1, sample));
+          out[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+        }
+        return out;
+      }
+
+      // Respaldo con voces reales en español si se ejecuta fuera del entorno de vista previa
+      async function synthesizeWithFallbackSpanishVoices(fullText, decodeCtx, onProgress) {
+        const smallChunks = splitTextIntoTtsChunks(fullText, 240).slice(0, 18);
+        const segments = [];
+
+        for (let i = 0; i < smallChunks.length; i++) {
+          if (onProgress) onProgress(i + 1, smallChunks.length);
+          const chunk = smallChunks[i];
+          let decoded = null;
+
+          // Intento 1: StreamElements Polly (Lucia)
+          try {
+            const pollyUrl = `https://api.streamelements.com/kappa/v2/speech?voice=Lucia&text=${encodeURIComponent(chunk)}`;
+            const res = await fetchBinaryWithTimeout(pollyUrl, {}, 8000);
+            const buf = await res.arrayBuffer();
+            if (buf.byteLength > 900) {
+              decoded = await decodeCtx.decodeAudioData(buf.slice(0));
+            }
+          } catch (e) {}
+
+          // Intento 2: Weilnet Neural TTS (es_002)
+          if (!decoded) {
+            try {
+              const res = await fetchBinaryWithTimeout(
+                'https://tiktok-tts.weilnet.workers.dev/api/generation',
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ text: chunk, voice: 'es_002' })
+                },
+                8000
+              );
+              const json = await res.json();
+              if (json?.data) {
+                const buf = base64ToArrayBuffer(json.data);
+                if (buf.byteLength > 700) {
+                  decoded = await decodeCtx.decodeAudioData(buf.slice(0));
+                }
+              }
+            } catch (e) {}
+          }
+
+          if (!decoded) {
+            throw new Error('Servidores de voz externa no disponibles');
+          }
+
+          segments.push(audioBufferToPcm16At24k(decoded));
+        }
+
+        return mergePcm16SegmentsToWav(segments, 24000, 0.2);
       }
 
       function triggerBlobDownload(blob, filename) {
@@ -2472,7 +2539,6 @@
         playTerminalBeep(1500, 0.08, 2200);
         const selectedVoice = el.ttsExportVoiceSelect.value || 'Aoede';
         const fullText = `${state.article.title}. ${state.article.paragraphs.join(' ')}`;
-        const chunks = splitTextIntoTtsChunks(fullText, 1050).slice(0, 6);
         const safeSlug =
           state.article.title
             .toLowerCase()
@@ -2483,49 +2549,50 @@
 
         el.btnDownloadAudio.disabled = true;
         el.audioExportProgressContainer.classList.remove('hidden');
-        el.audioExportStatusLabel.textContent = `SINTETIZANDO VOZ (${selectedVoice.toUpperCase()})...`;
+        el.audioExportStatusLabel.textContent = `SINTETIZANDO VOZ NEURONAL (${selectedVoice.toUpperCase()})...`;
         el.audioExportPercentLabel.textContent = '10%';
         el.audioExportProgressBar.style.width = '10%';
 
         try {
-          const pcmSegments = [];
-          let detectedSampleRate = 24000;
+          let finalWav = null;
 
-          for (let i = 0; i < chunks.length; i++) {
-            const pct = 12 + Math.round(((i + 1) / chunks.length) * 78);
-            el.audioExportStatusLabel.textContent = `GENERANDO LOCUCIÓN (${i + 1}/${chunks.length})...`;
-            el.audioExportPercentLabel.textContent = `${pct}%`;
-            el.audioExportProgressBar.style.width = `${pct}%`;
+          try {
+            const chunks = splitTextIntoTtsChunks(fullText, 1400).slice(0, 6);
+            const pcmSegments = [];
+            let detectedSampleRate = 24000;
 
-            const { pcm16, sampleRate } = await synthesizeChunkWithGeminiTts(chunks[i], selectedVoice);
-            pcmSegments.push(pcm16);
-            detectedSampleRate = sampleRate;
+            for (let i = 0; i < chunks.length; i++) {
+              const pct = 15 + Math.round(((i + 1) / chunks.length) * 75);
+              el.audioExportStatusLabel.textContent = `LOCUTANDO BLOQUE ${i + 1}/${chunks.length}...`;
+              el.audioExportPercentLabel.textContent = `${pct}%`;
+              el.audioExportProgressBar.style.width = `${pct}%`;
+
+              const { pcm16, sampleRate } = await synthesizeChunkWithGeminiTts(chunks[i], selectedVoice);
+              detectedSampleRate = sampleRate;
+              pcmSegments.push(pcm16);
+            }
+
+            finalWav = mergePcm16SegmentsToWav(pcmSegments, detectedSampleRate, 0.25);
+          } catch (geminiErr) {
+            const decodeCtx = ensureAudioContext() || new (window.AudioContext || window.webkitAudioContext)();
+            finalWav = await synthesizeWithFallbackSpanishVoices(fullText, decodeCtx, (curr, tot) => {
+              const pct = 15 + Math.round((curr / tot) * 75);
+              el.audioExportStatusLabel.textContent = `LOCUTANDO FRAGMENTO ${curr}/${tot}...`;
+              el.audioExportPercentLabel.textContent = `${pct}%`;
+              el.audioExportProgressBar.style.width = `${pct}%`;
+            });
           }
 
-          el.audioExportStatusLabel.textContent = 'EMPAQUETANDO ARCHIVO .WAV...';
-          el.audioExportPercentLabel.textContent = '96%';
-          el.audioExportProgressBar.style.width = '96%';
-
-          const totalSamples = pcmSegments.reduce((acc, seg) => acc + seg.length, 0);
-          const mergedPcm = new Int16Array(totalSamples);
-          let offset = 0;
-          pcmSegments.forEach((seg) => {
-            mergedPcm.set(seg, offset);
-            offset += seg.length;
-          });
-
-          const finalWav = pcm16ToWavBlob(mergedPcm, detectedSampleRate);
+          el.audioExportStatusLabel.textContent = 'ENSAMBLANDO ARCHIVO .WAV...';
           el.audioExportPercentLabel.textContent = '100%';
           el.audioExportProgressBar.style.width = '100%';
           publishReadyWavToUi(finalWav, filename);
-          showHudToast(`Archivo ${filename} generado y descargado.`);
+          showHudToast(`Audio realista listo y descargado: ${filename}`);
         } catch (err) {
-          el.audioExportStatusLabel.textContent = 'SINTETIZANDO VOZ LOCAL .WAV...';
-          el.audioExportPercentLabel.textContent = '100%';
-          el.audioExportProgressBar.style.width = '100%';
-          const offlineSpeechWav = buildOfflineSpanishSpeechWavBlob(fullText);
-          publishReadyWavToUi(offlineSpeechWav, filename);
-          showHudToast(`Archivo ${filename} generado. Pulsa "DESCARGAR ARCHIVO .WAV" si tu navegador bloqueó la descarga automática.`);
+          showHudToast(
+            'No se pudo generar el archivo de voz en este momento. Usa el botón PLAY para escuchar la lectura en directo.',
+            'error'
+          );
         } finally {
           el.btnDownloadAudio.disabled = false;
           setTimeout(() => {
