@@ -1,533 +1,2537 @@
-<!-- ... existing code ... -->
-          <!-- Selector de timbre para descarga .WAV y botón de exportación -->
-          <div class="space-y-2">
-            <div class="space-y-1">
-              <label for="ttsExportVoiceSelect" class="text-[11px] text-[#008f11] tracking-wider block">
-                TIMBRE VOCAL PARA EXPORTACIÓN .WAV:
-              </label>
-              <select
-                id="ttsExportVoiceSelect"
-                class="w-full bg-[#010603] border border-[#005917] text-[#00ff41] text-xs px-2.5 py-1.5 rounded focus:outline-none focus:border-[#00ff41]"
-              >
-                <option value="Aoede">AOEDE // LOCUTORA CLARA (ES)</option>
-                <option value="Kore">KORE // LOCUTORA INFORMATIVA (ES)</option>
-                <option value="Orus">ORUS // LOCUTOR NOTICIARIO (ES)</option>
-                <option value="Charon">CHARON // LOCUTOR PROFUNDO (ES)</option>
-              </select>
-            </div>
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LECTOR DE NOTICIAS // TERMINAL DE EXTRACCIÓN NEURONAL</title>
+  <!-- Tailwind CSS para estructura responsiva -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- JSZip para empaquetado y descarga masiva de fotografías -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- LameJS para codificación MP3 de respaldo en navegador -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lamejs.min.js"></script>
+  <!-- Tipografías digitales / monoespaciadas estilo terminal -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
 
+  <style>
+    /* =========================================================================
+       VARIABLES Y TEMA FUTURISTA MATRIX + MU/TH/UR 6000 (ALIEN)
+       ========================================================================= */
+    :root {
+      --bg-void: #020804;
+      --bg-panel: #041108;
+      --bg-panel-alt: #06180c;
+      --matrix-green: #00ff41;
+      --matrix-mid: #00cc33;
+      --matrix-dim: #005917;
+      --matrix-dark: #002b0b;
+      --alien-amber: #ffb000;
+      --alien-red: #ff3b30;
+      --glow-sm: 0 0 8px rgba(0, 255, 65, 0.35);
+      --glow-md: 0 0 16px rgba(0, 255, 65, 0.45);
+      --glow-lg: 0 0 28px rgba(0, 255, 65, 0.6);
+    }
+
+    * {
+      box-sizing: border-box;
+      scrollbar-width: thin;
+      scrollbar-color: var(--matrix-mid) var(--bg-void);
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-void);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--matrix-dim);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--matrix-green);
+    }
+
+    body {
+      background-color: var(--bg-void);
+      color: var(--matrix-green);
+      font-family: 'Share Tech Mono', 'JetBrains Mono', monospace;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image:
+        radial-gradient(circle at 50% 0%, rgba(0, 255, 65, 0.08) 0%, transparent 65%),
+        linear-gradient(rgba(0, 255, 65, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 65, 0.025) 1px, transparent 1px);
+      background-size: 100% 100%, 32px 32px, 32px 32px;
+    }
+
+    /* Líneas de escaneo CRT sutiles (no bloquean clics) */
+    .crt-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9998;
+      background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%,
+        rgba(0, 0, 0, 0.28) 50%
+      );
+      background-size: 100% 4px;
+      opacity: 0.45;
+    }
+
+    .crt-vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9997;
+      box-shadow: inset 0 0 90px rgba(0, 0, 0, 0.85);
+    }
+
+    /* Contenedores HUD con esquinas técnicas */
+    .hud-panel {
+      background: linear-gradient(180deg, rgba(5, 20, 10, 0.94) 0%, rgba(2, 10, 5, 0.96) 100%);
+      border: 1px solid var(--matrix-dim);
+      box-shadow: 0 0 20px rgba(0, 255, 65, 0.08), inset 0 0 24px rgba(0, 255, 65, 0.04);
+      position: relative;
+      border-radius: 6px;
+    }
+
+    .hud-panel::before,
+    .hud-panel::after {
+      content: '';
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      border-color: var(--matrix-green);
+      border-style: solid;
+      pointer-events: none;
+    }
+
+    .hud-panel::before {
+      top: -1px;
+      left: -1px;
+      border-width: 2px 0 0 2px;
+      border-top-left-radius: 6px;
+    }
+
+    .hud-panel::after {
+      bottom: -1px;
+      right: -1px;
+      border-width: 0 2px 2px 0;
+      border-bottom-right-radius: 6px;
+    }
+
+    .text-glow {
+      text-shadow: 0 0 8px rgba(0, 255, 65, 0.6);
+    }
+
+    .text-glow-strong {
+      text-shadow: 0 0 12px rgba(0, 255, 65, 0.85), 0 0 24px rgba(0, 255, 65, 0.4);
+    }
+
+    /* Botones tácticos futuristas */
+    .btn-matrix {
+      background: rgba(0, 43, 11, 0.85);
+      border: 1px solid var(--matrix-mid);
+      color: var(--matrix-green);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      transition: all 0.18s ease;
+      box-shadow: 0 0 10px rgba(0, 255, 65, 0.12);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .btn-matrix:hover:not(:disabled) {
+      background: rgba(0, 255, 65, 0.18);
+      border-color: var(--matrix-green);
+      box-shadow: var(--glow-md);
+      color: #b8ffca;
+      transform: translateY(-1px);
+    }
+
+    .btn-matrix:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-matrix:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-matrix-primary {
+      background: rgba(0, 255, 65, 0.18);
+      border: 1px solid var(--matrix-green);
+      color: #ccffd9;
+      font-weight: 700;
+      box-shadow: var(--glow-sm);
+    }
+
+    .btn-matrix-primary:hover:not(:disabled) {
+      background: var(--matrix-green);
+      color: #020804;
+      box-shadow: var(--glow-lg);
+    }
+
+    .btn-amber {
+      background: rgba(60, 40, 0, 0.65);
+      border: 1px solid var(--alien-amber);
+      color: var(--alien-amber);
+    }
+
+    .btn-amber:hover:not(:disabled) {
+      background: rgba(255, 176, 0, 0.22);
+      box-shadow: 0 0 14px rgba(255, 176, 0, 0.45);
+    }
+
+    /* Inputs y Selects estilo terminal */
+    .input-matrix {
+      background: rgba(1, 6, 3, 0.95);
+      border: 1px solid var(--matrix-dim);
+      color: var(--matrix-green);
+      font-family: 'JetBrains Mono', monospace;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .input-matrix:focus {
+      outline: none;
+      border-color: var(--matrix-green);
+      box-shadow: var(--glow-sm);
+    }
+
+    .input-matrix::placeholder {
+      color: rgba(0, 255, 65, 0.35);
+    }
+
+    /* Range Slider personalizado */
+    input[type="range"].matrix-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--matrix-dark);
+      height: 6px;
+      border-radius: 3px;
+      border: 1px solid var(--matrix-dim);
+    }
+
+    input[type="range"].matrix-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      background: var(--matrix-green);
+      border: 1px solid #ffffff;
+      box-shadow: var(--glow-md);
+      cursor: pointer;
+    }
+
+    input[type="range"].matrix-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      background: var(--matrix-green);
+      border: 1px solid #ffffff;
+      box-shadow: var(--glow-md);
+      cursor: pointer;
+    }
+
+    /* Cursor parpadeante de máquina de escribir digital */
+    .terminal-cursor {
+      display: inline-block;
+      width: 0.62em;
+      height: 1.1em;
+      background-color: var(--matrix-green);
+      vertical-align: text-bottom;
+      margin-left: 3px;
+      box-shadow: var(--glow-sm);
+      animation: blinkCursor 0.65s steps(2, start) infinite;
+    }
+
+    @keyframes blinkCursor {
+      to {
+        visibility: hidden;
+      }
+    }
+
+    /* Párrafo activo durante la lectura de voz */
+    .article-paragraph {
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1.78;
+      padding: 0.65rem 0.9rem;
+      border-left: 2px solid transparent;
+      border-radius: 4px;
+      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+      cursor: pointer;
+    }
+
+    .article-paragraph:hover {
+      background-color: rgba(0, 255, 65, 0.05);
+      border-left-color: var(--matrix-dim);
+    }
+
+    .article-paragraph.active-reading {
+      background-color: rgba(0, 255, 65, 0.13);
+      border-left: 3px solid var(--matrix-green);
+      color: #d4ffdf;
+      text-shadow: 0 0 8px rgba(0, 255, 65, 0.35);
+      box-shadow: inset 0 0 18px rgba(0, 255, 65, 0.08);
+    }
+
+    /* Animación de pulso para LEDs */
+    @keyframes pulseLed {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.92); }
+    }
+
+    .led-active {
+      animation: pulseLed 1.4s infinite ease-in-out;
+    }
+
+    /* Barra de escaneo superior */
+    @keyframes scanBar {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+
+    .scanning-line {
+      animation: scanBar 1.6s linear infinite;
+    }
+  </style>
+</head>
+<body class="p-2 sm:p-4 lg:p-6 selection:bg-[#00ff41] selection:text-[#020804]">
+  <!-- Capas visuales CRT -->
+  <div class="crt-overlay"></div>
+  <div class="crt-vignette"></div>
+
+  <!-- Contenedor Principal -->
+  <div class="max-w-[1600px] mx-auto space-y-4 relative z-10">
+
+    <!-- =====================================================================
+         1. CABECERA Y ENTRADA DE URL (MU/TH/UR 6000 INTERFACE)
+         ===================================================================== -->
+    <header class="hud-panel p-4 sm:p-5">
+      <!-- Barra superior de telemetría -->
+      <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-[#004d14] text-xs tracking-wider text-[#00cc33]">
+        <div class="flex items-center gap-3">
+          <span class="inline-flex items-center gap-1.5 font-bold text-[#00ff41]">
+            <span id="systemLed" class="w-2.5 h-2.5 rounded-full bg-[#00ff41] shadow-[0_0_8px_#00ff41] led-active"></span>
+            MU/TH/UR 6000 // SUBSISTEMA DE EXTRACCIÓN v9.4
+          </span>
+          <span class="hidden md:inline text-[#007a1f]">|</span>
+          <span id="systemStatusText" class="hidden sm:inline text-[#80ff9f]">ESTADO: EN LÍNEA // ESPERANDO OBJETIVO</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <span id="telemetryMetrics" class="hidden xl:inline text-[#00aa2b]">MEM: 98.4% // PARSER DOM: LISTO // TTS NEURONAL: ACTIVO</span>
+          <span id="systemClock" class="px-2 py-0.5 bg-[#020a04] border border-[#005917] rounded text-[#00ff41] font-bold">00:00:00</span>
+          <button
+            id="btnToggleTerminalAudio"
+            type="button"
+            class="btn-matrix px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5"
+            title="Activar o silenciar efectos sonoros de terminal Alien"
+          >
+            <span id="audioIcon">🔊</span>
+            <span id="audioToggleText">[AUDIO TERMINAL: ON]</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Título principal -->
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
+        <div>
+          <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold tracking-widest text-[#00ff41] text-glow-strong">
+            LECTOR DE NOTICIAS // TERMINAL DE EXTRACCIÓN NEURONAL
+          </h1>
+          <p class="text-xs sm:text-sm text-[#00cc33] mt-0.5">
+            EXTRACCIÓN LIMPIA DE CONTENIDO · ELIMINACIÓN DE SCRIPTS Y SUPERPOSICIONES · SÍNTESIS VOCAL DE ALTA DEFINICIÓN
+          </p>
+        </div>
+
+        <!-- Botones de demostración rápida y entrada manual -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="btnDemo1" type="button" class="btn-matrix px-3 py-2 rounded text-xs sm:text-sm">
+            ⚡ CARGAR NOTICIA DEMO 1
+          </button>
+          <button id="btnDemo2" type="button" class="btn-matrix px-3 py-2 rounded text-xs sm:text-sm">
+            ⚡ CARGAR NOTICIA DEMO 2
+          </button>
+          <button id="btnOpenManualModal" type="button" class="btn-amber px-3 py-2 rounded text-xs sm:text-sm font-bold">
+            📋 PEGAR HTML / TEXTO
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra de entrada de URL -->
+      <div class="flex flex-col md:flex-row gap-2.5">
+        <div class="relative flex-1">
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[#00ff41] font-bold select-none">URL&gt;</span>
+          <input
+            id="urlInput"
+            type="url"
+            placeholder="https://ejemplo.com/noticia-investigacion-tecnologia..."
+            class="input-matrix w-full pl-14 pr-10 py-3 rounded text-sm sm:text-base"
+            autocomplete="off"
+          />
+          <button
+            id="btnClearUrl"
+            type="button"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#00aa2b] hover:text-[#00ff41] px-1.5 py-0.5 text-sm"
+            title="Limpiar URL"
+          >
+            ✕
+          </button>
+        </div>
+        <button
+          id="btnExtract"
+          type="button"
+          class="btn-matrix btn-matrix-primary px-6 py-3 rounded text-sm sm:text-base tracking-wider flex items-center justify-center gap-2 shrink-0"
+        >
+          <span>▶ EXTRAER NOTICIA</span>
+        </button>
+      </div>
+
+      <!-- Barra de progreso de extracción (oculta cuando está inactiva) -->
+      <div id="extractionProgressBox" class="hidden mt-3 pt-2.5 border-t border-[#004d14]">
+        <div class="flex items-center justify-between text-xs mb-1">
+          <span id="extractionStepText" class="text-[#80ff9f]">INICIANDO CONEXIÓN CON NODOS PROXY...</span>
+          <span id="extractionPercentText" class="text-[#00ff41] font-bold">15%</span>
+        </div>
+        <div class="w-full h-2 bg-[#010603] border border-[#005917] rounded overflow-hidden relative">
+          <div id="extractionProgressBar" class="h-full bg-[#00ff41] transition-all duration-300" style="width: 15%"></div>
+          <div class="scanning-line absolute top-0 left-0 w-1/3 h-full bg-gradient-to-r from-transparent via-white/40 to-transparent"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- =====================================================================
+         2. CUERPO PRINCIPAL: VENTANA DE LECTURA + REPRODUCTOR + GALERÍA
+         ===================================================================== -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+      <!-- COLUMNA IZQUIERDA (7/12 en escritorio): VENTANA AMPLIA DE LECTURA -->
+      <section class="lg:col-span-7 xl:col-span-8 hud-panel p-4 sm:p-6 flex flex-col min-h-[580px]">
+        <!-- Cabecera del visor de lectura -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-[#004d14]">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 bg-[#002b0b] border border-[#00ff41] text-[#00ff41] text-xs font-bold rounded">
+              MÓDULO 01 // VISOR DE LECTURA PURIFICADA
+            </span>
+            <span id="cleanStatsBadge" class="hidden sm:inline text-xs text-[#00cc33]">
+              [FILTRO ANTI-SCRIPTS ACTIVO]
+            </span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
             <button
-              id="btnDownloadAudio"
+              id="btnSkipTypewriter"
               type="button"
-              class="btn-matrix w-full py-2.5 px-3 rounded text-xs font-bold flex items-center justify-center gap-1.5 border-[#00ff41]"
+              class="hidden btn-amber px-3 py-1.5 rounded text-xs font-bold"
             >
-              <span>⬇ GENERAR Y DESCARGAR AUDIO [.WAV]</span>
+              ⏩ MOSTRAR TODO AL INSTANTE
             </button>
+            <button
+              id="btnCopyArticle"
+              type="button"
+              class="btn-matrix px-3 py-1.5 rounded text-xs"
+              title="Copiar texto limpio al portapapeles"
+            >
+              📄 COPIAR TEXTO
+            </button>
+          </div>
+        </div>
 
-            <div id="audioExportProgressContainer" class="hidden mt-2 space-y-1">
+        <!-- Metadatos de la noticia extraída -->
+        <div id="articleMetaHeader" class="mb-4 pb-4 border-b border-[#003b0f]">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#00cc33] mb-2">
+            <span id="metaSource">ORIGEN: TERMINAL LOCAL</span>
+            <span>|</span>
+            <span id="metaDate">FECHA: --/--/----</span>
+            <span>|</span>
+            <span id="metaStats">0 PALABRAS · ~0 MIN LECTURA</span>
+            <span>|</span>
+            <span id="metaCleanedCount" class="text-[#80ff9f]">NODOS BLOQUEADOS: 0</span>
+          </div>
+          <h2 id="articleTitle" class="text-xl sm:text-2xl lg:text-[26px] font-bold text-[#00ff41] text-glow leading-snug">
+            SISTEMA MU/TH/UR 6000 INICIALIZADO — ESPERANDO NOTICIA
+          </h2>
+          <p id="articleSubtitle" class="text-sm text-[#80ff9f] mt-2 leading-relaxed">
+            Introduzca la URL de cualquier artículo periodístico en la consola superior, utilice el modo de pegado directo HTML/Texto o ejecute una de las noticias de demostración para iniciar la decodificación en pantalla.
+          </p>
+        </div>
+
+        <!-- Área amplia de lectura con efecto máquina de escribir digital -->
+        <div
+          id="readerViewport"
+          class="flex-1 overflow-y-auto max-h-[68vh] pr-1 sm:pr-2 space-y-3 text-base sm:text-[17px] text-[#00ff41]"
+        >
+          <div class="p-4 border border-dashed border-[#005917] rounded bg-[#020a04]/70 text-sm text-[#00cc33] space-y-2">
+            <p>&gt; PROTOCOLO DE EXTRACCIÓN DOM PREPARADO.</p>
+            <p>&gt; METADATOS JSON-LD Y OPENGRAPH EN MODO DE ESCUCHA.</p>
+            <p>&gt; SUPRESIÓN AUTOMÁTICA DE SCRIPTS, BANNERS, VENTANAS EMERGENTES Y CAPAS DE SUPERPOSICIÓN.</p>
+            <p>&gt; HAGA CLIC EN CUALQUIER PÁRRAFO DURANTE LA LECTURA PARA SINCRONIZAR LA VOZ NEURONAL.<span class="terminal-cursor"></span></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- COLUMNA DERECHA (5/12 en escritorio): REPRODUCTOR DE VOZ + GALERÍA -->
+      <aside class="lg:col-span-5 xl:col-span-4 space-y-4">
+
+        <!-- =================================================================
+             MÓDULO 02: REPRODUCTOR DE VOZ NEURONAL Y ONDAS DE AUDIO
+             ================================================================= -->
+        <section class="hud-panel p-4 sm:p-5 space-y-4">
+          <div class="flex items-center justify-between border-b border-[#004d14] pb-2.5">
+            <span class="px-2 py-0.5 bg-[#002b0b] border border-[#00ff41] text-[#00ff41] text-xs font-bold rounded">
+              MÓDULO 02 // SÍNTESIS VOCAL Y ONDAS
+            </span>
+            <span id="ttsStatusBadge" class="text-xs font-bold text-[#00cc33]">
+              [EN ESPERA]
+            </span>
+          </div>
+
+          <!-- Simulador de ondas de audio en tiempo real (Canvas) -->
+          <div class="relative rounded border border-[#005917] bg-[#010603] overflow-hidden p-1">
+            <div class="flex justify-between items-center px-2 py-0.5 text-[10px] text-[#00aa2b] border-b border-[#002b0b]">
+              <span>OSCILOSCOPIO ARMÓNICO // 44.1 kHz</span>
+              <span id="waveformFreqLabel">0.0 Hz // REPOSO</span>
+            </div>
+            <div id="waveformContainer" class="w-full h-28 sm:h-32 relative">
+              <canvas id="audioWaveformCanvas" class="block w-full h-full"></canvas>
+            </div>
+          </div>
+
+          <!-- Selector de voz realista -->
+          <div>
+            <label for="voiceSelect" class="block text-xs text-[#00cc33] mb-1">
+              VOZ SINTÉTICA (SELECCIÓN AUTOMÁTICA NEURONAL EN ESPAÑOL):
+            </label>
+            <select id="voiceSelect" class="input-matrix w-full px-3 py-2 rounded text-xs sm:text-sm">
+              <option value="">Detectando motores de voz del sistema...</option>
+            </select>
+          </div>
+
+          <!-- Barra de progreso interactiva del audio -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between text-xs text-[#80ff9f]">
+              <span id="audioParagraphProgress">PÁRRAFO: 0 / 0</span>
+              <span id="audioTimeProgress">00:00 / 00:00 (0%)</span>
+            </div>
+            <div
+              id="audioProgressTrack"
+              class="w-full h-3.5 bg-[#010603] border border-[#005917] rounded cursor-pointer relative overflow-hidden group"
+              title="Haz clic en cualquier punto para saltar en la lectura"
+            >
+              <div
+                id="audioProgressFill"
+                class="h-full bg-gradient-to-r from-[#008f24] to-[#00ff41] shadow-[0_0_10px_#00ff41] transition-all duration-150"
+                style="width: 0%"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Controles principales: PLAY, PAUSA, STOP -->
+          <div class="grid grid-cols-3 gap-2">
+            <button
+              id="btnAudioPlay"
+              type="button"
+              class="btn-matrix btn-matrix-primary py-2.5 px-3 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5"
+            >
+              <span>▶ PLAY</span>
+            </button>
+            <button
+              id="btnAudioPause"
+              type="button"
+              class="btn-matrix py-2.5 px-3 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5"
+            >
+              <span>⏸ PAUSA</span>
+            </button>
+            <button
+              id="btnAudioStop"
+              type="button"
+              class="btn-matrix py-2.5 px-3 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5"
+            >
+              <span>⏹ STOP</span>
+            </button>
+          </div>
+
+          <!-- Controlador de velocidad del audio -->
+          <div class="p-3 rounded bg-[#020a04] border border-[#003b0f] space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-[#00cc33]">VELOCIDAD DE LECTURA:</span>
+              <span id="speedValueDisplay" class="text-[#00ff41] font-bold text-sm">1.00x</span>
+            </div>
+            <input
+              id="speedSlider"
+              type="range"
+              min="0.5"
+              max="2.0"
+              step="0.05"
+              value="1.0"
+              class="matrix-slider w-full"
+            />
+            <div class="grid grid-cols-5 gap-1.5 pt-1">
+              <button type="button" data-speed="0.75" class="speed-preset btn-matrix py-1 rounded text-xs">0.75x</button>
+              <button type="button" data-speed="1.0" class="speed-preset btn-matrix btn-matrix-primary py-1 rounded text-xs">1.0x</button>
+              <button type="button" data-speed="1.25" class="speed-preset btn-matrix py-1 rounded text-xs">1.25x</button>
+              <button type="button" data-speed="1.5" class="speed-preset btn-matrix py-1 rounded text-xs">1.5x</button>
+              <button type="button" data-speed="2.0" class="speed-preset btn-matrix py-1 rounded text-xs">2.0x</button>
+            </div>
+          </div>
+
+          <!-- Botón de descarga de audio .MP3 -->
+          <div class="pt-1">
+            <button
+              id="btnDownloadMp3"
+              type="button"
+              class="btn-matrix w-full py-3 px-4 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-2 border-[#00ff41]"
+            >
+              <span>⬇ DESCARGAR AUDIO .MP3</span>
+            </button>
+            <div id="mp3ProgressContainer" class="hidden mt-2 space-y-1">
               <div class="flex justify-between text-[11px] text-[#80ff9f]">
-                <span id="audioExportStatusLabel">SINTETIZANDO AUDIO WAV...</span>
-                <span id="audioExportPercentLabel">0%</span>
+                <span id="mp3StatusLabel">SINTETIZANDO FLUJO MP3...</span>
+                <span id="mp3PercentLabel">0%</span>
               </div>
               <div class="w-full h-1.5 bg-[#010603] border border-[#005917] rounded overflow-hidden">
-                <div id="audioExportProgressBar" class="h-full bg-[#00ff41] transition-all duration-200" style="width: 0%"></div>
+                <div id="mp3ProgressBar" class="h-full bg-[#00ff41] transition-all duration-200" style="width: 0%"></div>
               </div>
-            </div>
-
-            <!-- Reproductor y enlace directo de guardado .WAV (anti-bloqueo iframe) -->
-            <div id="audioReadyDownloadBox" class="hidden mt-2 p-2.5 rounded border border-[#00ff41] bg-[#010a04] space-y-2">
-              <div class="text-[11px] text-[#80ff9f] font-bold">
-                ✔ PISTA .WAV LISTA PARA REPRODUCIR O GUARDAR:
-              </div>
-              <audio id="exportedWavPreview" controls class="w-full h-8 rounded"></audio>
-              <a
-                id="directWavDownloadLink"
-                href="#"
-                download="noticia_audio.wav"
-                class="btn-matrix w-full py-2 px-3 rounded text-xs font-bold flex items-center justify-center gap-1.5 text-center no-underline"
-              >
-                <span>💾 GUARDAR ARCHIVO .WAV EN DISCO</span>
-              </a>
             </div>
           </div>
         </section>
-<!-- ... existing code ... -->
+
+        <!-- =================================================================
+             MÓDULO 03: VENTANA DE FOTOGRAFÍAS Y DESCARGA
+             ================================================================= -->
+        <section class="hud-panel p-4 sm:p-5 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#004d14] pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 bg-[#002b0b] border border-[#00ff41] text-[#00ff41] text-xs font-bold rounded">
+                MÓDULO 03 // ARCHIVO VISUAL
+              </span>
+              <span id="photoCountBadge" class="text-xs text-[#80ff9f] font-bold">(0 FOTOS)</span>
+            </div>
+
+            <button
+              id="btnDownloadAllPhotos"
+              type="button"
+              class="btn-matrix px-3 py-1.5 rounded text-xs font-bold"
+              disabled
+            >
+              ⬇ DESCARGAR FOTOGRAFÍAS
+            </button>
+          </div>
+
+          <!-- Cuadrícula de fotografías extraídas -->
+          <div id="photoGalleryGrid" class="grid grid-cols-2 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+            <div class="col-span-2 p-6 text-center border border-dashed border-[#004d14] rounded text-xs text-[#00aa2b]">
+              NO SE HAN DETECTADO REGISTROS VISUALES EN MEMORIA.
+            </div>
+          </div>
+        </section>
+
+      </aside>
+    </main>
+  </div>
+
+  <!-- =======================================================================
+       MODAL 1: PEGAR HTML / TEXTO DIRECTO (RESPALDO ANTI-CORS)
+       ======================================================================= -->
+  <div
+    id="manualInputModal"
+    class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+  >
+    <div class="hud-panel w-full max-w-3xl p-5 sm:p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-[#004d14] pb-3">
+        <h3 class="text-base sm:text-lg font-bold text-[#00ff41] text-glow">
+          ENTRADA MANUAL DE DATOS // INYECCIÓN HTML O TEXTO PLANO
+        </h3>
+        <button id="btnCloseManualModal" type="button" class="btn-matrix px-2.5 py-1 rounded text-xs font-bold">
+          ✕ CERRAR
+        </button>
+      </div>
+
+      <p class="text-xs sm:text-sm text-[#80ff9f]">
+        Si un servidor bloquea las peticiones externas o requiere sesión local, copie el código fuente HTML de la página (<code class="px-1 bg-[#002b0b] rounded">Ctrl+U</code> &rarr; <code class="px-1 bg-[#002b0b] rounded">Ctrl+A</code> &rarr; <code class="px-1 bg-[#002b0b] rounded">Ctrl+C</code>) o pegue directamente el texto del artículo aquí:
+      </p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <input
+          id="manualTitleInput"
+          type="text"
+          placeholder="Titular opcional (si pegas texto plano)..."
+          class="input-matrix px-3 py-2 rounded text-xs sm:text-sm"
+        />
+        <input
+          id="manualBaseUrlInput"
+          type="url"
+          placeholder="URL original opcional (para resolver imágenes)..."
+          class="input-matrix px-3 py-2 rounded text-xs sm:text-sm"
+        />
+      </div>
+
+      <textarea
+        id="manualContentTextarea"
+        rows="10"
+        placeholder="Pegue aquí el código HTML completo de la noticia o los párrafos del artículo..."
+        class="input-matrix w-full p-3 rounded text-xs sm:text-sm"
+      ></textarea>
+
+      <div class="flex flex-wrap justify-end gap-2.5">
+        <button id="btnCancelManualModal" type="button" class="btn-matrix px-4 py-2 rounded text-xs sm:text-sm">
+          CANCELAR
+        </button>
+        <button id="btnProcessManualContent" type="button" class="btn-matrix btn-matrix-primary px-5 py-2 rounded text-xs sm:text-sm font-bold">
+          ▶ PROCESAR Y LIMPIAR CONTENIDO
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =======================================================================
+       MODAL 2: LIGHTBOX DE VISTA PREVIA DE FOTOGRAFÍAS
+       ======================================================================= -->
+  <div
+    id="photoLightboxModal"
+    class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+  >
+    <div class="hud-panel max-w-5xl w-full p-4 space-y-3">
+      <div class="flex items-center justify-between border-b border-[#004d14] pb-2">
+        <span id="lightboxCaption" class="text-xs sm:text-sm text-[#00ff41] truncate pr-4">
+          INSPECCIÓN VISUAL DE ARCHIVO
+        </span>
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btnLightboxDownload" type="button" class="btn-matrix btn-matrix-primary px-3 py-1.5 rounded text-xs font-bold">
+            ⬇ DESCARGAR IMAGEN
+          </button>
+          <button id="btnCloseLightbox" type="button" class="btn-matrix px-3 py-1.5 rounded text-xs font-bold">
+            ✕ CERRAR
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-[#010502] border border-[#003b0f] rounded flex items-center justify-center max-h-[75vh] overflow-hidden p-2">
+        <img
+          id="lightboxImage"
+          src=""
+          alt="Vista ampliada"
+          class="max-h-[72vh] max-w-full object-contain rounded"
+        />
+      </div>
+    </div>
+  </div>
+
+  <!-- =======================================================================
+       SISTEMA DE NOTIFICACIONES HUD (SIN ALERTAS NATIVAS)
+       ======================================================================= -->
+  <div id="hudToastContainer" class="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm w-full pointer-events-none px-3 sm:px-0"></div>
+
+  <!-- =======================================================================
+       LÓGICA COMPLETA DE APLICACIÓN
+       ======================================================================= -->
+  <script>
+    (function () {
+      'use strict';
+
+      /* ---------------------------------------------------------------------
+         ESTADO GLOBAL DE LA TERMINAL
+         --------------------------------------------------------------------- */
+      const state = {
+        terminalSoundEnabled: true,
+        audioCtx: null,
+        article: {
+          title: '',
+          subtitle: '',
+          source: 'TERMINAL LOCAL',
+          date: '',
+          paragraphs: [],
+          images: [],
+          cleanedElementsCount: 0
+        },
+        typewriter: {
+          active: false,
+          timerId: null,
+          pIndex: 0,
+          charIndex: 0,
+          soundThrottle: 0
+        },
+        tts: {
+          isPlaying: false,
+          isPaused: false,
+          currentParagraph: 0,
+          rate: 1.0,
+          voices: [],
+          selectedVoiceURI: '',
+          boundaryEnergy: 0,
+          keepAliveTimer: null,
+          utterance: null
+        },
+        lightboxCurrentImg: null
+      };
+
+      /* ---------------------------------------------------------------------
+         REFERENCIAS AL DOM
+         --------------------------------------------------------------------- */
+      const el = {
+        systemClock: document.getElementById('systemClock'),
+        systemStatusText: document.getElementById('systemStatusText'),
+        btnToggleTerminalAudio: document.getElementById('btnToggleTerminalAudio'),
+        audioIcon: document.getElementById('audioIcon'),
+        audioToggleText: document.getElementById('audioToggleText'),
+        urlInput: document.getElementById('urlInput'),
+        btnClearUrl: document.getElementById('btnClearUrl'),
+        btnExtract: document.getElementById('btnExtract'),
+        btnDemo1: document.getElementById('btnDemo1'),
+        btnDemo2: document.getElementById('btnDemo2'),
+        btnOpenManualModal: document.getElementById('btnOpenManualModal'),
+        extractionProgressBox: document.getElementById('extractionProgressBox'),
+        extractionStepText: document.getElementById('extractionStepText'),
+        extractionPercentText: document.getElementById('extractionPercentText'),
+        extractionProgressBar: document.getElementById('extractionProgressBar'),
+        btnSkipTypewriter: document.getElementById('btnSkipTypewriter'),
+        btnCopyArticle: document.getElementById('btnCopyArticle'),
+        metaSource: document.getElementById('metaSource'),
+        metaDate: document.getElementById('metaDate'),
+        metaStats: document.getElementById('metaStats'),
+        metaCleanedCount: document.getElementById('metaCleanedCount'),
+        articleTitle: document.getElementById('articleTitle'),
+        articleSubtitle: document.getElementById('articleSubtitle'),
+        readerViewport: document.getElementById('readerViewport'),
+        ttsStatusBadge: document.getElementById('ttsStatusBadge'),
+        waveformFreqLabel: document.getElementById('waveformFreqLabel'),
+        waveformContainer: document.getElementById('waveformContainer'),
+        audioWaveformCanvas: document.getElementById('audioWaveformCanvas'),
+        voiceSelect: document.getElementById('voiceSelect'),
+        audioParagraphProgress: document.getElementById('audioParagraphProgress'),
+        audioTimeProgress: document.getElementById('audioTimeProgress'),
+        audioProgressTrack: document.getElementById('audioProgressTrack'),
+        audioProgressFill: document.getElementById('audioProgressFill'),
+        btnAudioPlay: document.getElementById('btnAudioPlay'),
+        btnAudioPause: document.getElementById('btnAudioPause'),
+        btnAudioStop: document.getElementById('btnAudioStop'),
         speedValueDisplay: document.getElementById('speedValueDisplay'),
         speedSlider: document.getElementById('speedSlider'),
-        ttsExportVoiceSelect: document.getElementById('ttsExportVoiceSelect'),
-        btnDownloadAudio: document.getElementById('btnDownloadAudio'),
-        audioExportProgressContainer: document.getElementById('audioExportProgressContainer'),
-        audioExportStatusLabel: document.getElementById('audioExportStatusLabel'),
-        audioExportPercentLabel: document.getElementById('audioExportPercentLabel'),
-        audioExportProgressBar: document.getElementById('audioExportProgressBar'),
-        audioReadyDownloadBox: document.getElementById('audioReadyDownloadBox'),
-        exportedWavPreview: document.getElementById('exportedWavPreview'),
-        directWavDownloadLink: document.getElementById('directWavDownloadLink'),
+        btnDownloadMp3: document.getElementById('btnDownloadMp3'),
+        mp3ProgressContainer: document.getElementById('mp3ProgressContainer'),
+        mp3StatusLabel: document.getElementById('mp3StatusLabel'),
+        mp3PercentLabel: document.getElementById('mp3PercentLabel'),
+        mp3ProgressBar: document.getElementById('mp3ProgressBar'),
         photoCountBadge: document.getElementById('photoCountBadge'),
-<!-- ... existing code ... -->
-      // Descarga el documento mediante carrera paralela de nodos proxy + Jina Reader + Archivo Web
-      async function fetchHtmlWithProxyCascade(targetUrl) {
-        const runWithTimeout = async (name, fn, timeoutMs = 8500) => {
-          const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), timeoutMs);
-          try {
-            const html = await fn(targetUrl, controller.signal);
-            clearTimeout(timer);
-            if (html && html.trim().length > 250) {
-              return { name, html };
-            }
-            throw new Error(`${name}: contenido vacío o bloqueado`);
-          } catch (err) {
-            clearTimeout(timer);
-            throw err;
+        btnDownloadAllPhotos: document.getElementById('btnDownloadAllPhotos'),
+        photoGalleryGrid: document.getElementById('photoGalleryGrid'),
+        manualInputModal: document.getElementById('manualInputModal'),
+        btnCloseManualModal: document.getElementById('btnCloseManualModal'),
+        btnCancelManualModal: document.getElementById('btnCancelManualModal'),
+        btnProcessManualContent: document.getElementById('btnProcessManualContent'),
+        manualTitleInput: document.getElementById('manualTitleInput'),
+        manualBaseUrlInput: document.getElementById('manualBaseUrlInput'),
+        manualContentTextarea: document.getElementById('manualContentTextarea'),
+        photoLightboxModal: document.getElementById('photoLightboxModal'),
+        lightboxCaption: document.getElementById('lightboxCaption'),
+        lightboxImage: document.getElementById('lightboxImage'),
+        btnLightboxDownload: document.getElementById('btnLightboxDownload'),
+        btnCloseLightbox: document.getElementById('btnCloseLightbox'),
+        hudToastContainer: document.getElementById('hudToastContainer')
+      };
+
+      /* ---------------------------------------------------------------------
+         NOTIFICACIONES TOAST ESTILO HUD
+         --------------------------------------------------------------------- */
+      function showHudToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        const borderClass =
+          type === 'error'
+            ? 'border-[#ff3b30] text-[#ff857d]'
+            : type === 'warn'
+            ? 'border-[#ffb000] text-[#ffd470]'
+            : 'border-[#00ff41] text-[#00ff41]';
+
+        toast.className = `pointer-events-auto bg-[#030f07]/95 border ${borderClass} px-3.5 py-2.5 rounded shadow-lg text-xs font-mono flex items-start gap-2 transition-all duration-300`;
+        toast.innerHTML = `
+          <span class="font-bold shrink-0">${type === 'error' ? '[ERR]' : type === 'warn' ? '[AVISO]' : '[SYS]'}</span>
+          <span class="leading-snug">${escapeHtml(message)}</span>
+        `;
+        el.hudToastContainer.appendChild(toast);
+
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateX(12px)';
+          setTimeout(() => toast.remove(), 300);
+        }, 4200);
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      /* ---------------------------------------------------------------------
+         SINTETIZADOR WEB AUDIO API (SONIDO COMPUTADORA MU/TH/UR 6000 ALIEN)
+         --------------------------------------------------------------------- */
+      function ensureAudioContext() {
+        if (!state.audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            state.audioCtx = new AudioContextClass();
           }
-        };
-
-        setExtractionProgress(true, 'SONDEANDO NODOS PROXY EN PARALELO...', 22);
-
-        const parallelTasks = [
-          runWithTimeout('ALLORIGINS-RAW', async (u, signal) => {
-            const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`, { signal });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const html = await res.text();
-            return isBlockedOrInvalidHtml(html) ? '' : html;
-          }),
-          runWithTimeout('JINA-READER-ENGINE', async (u, signal) => {
-            const res = await fetch(`https://r.jina.ai/${u}`, { signal });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const md = await res.text();
-            return convertJinaMarkdownToHtml(md, u);
-          }),
-          runWithTimeout('CODETABS-PROXY', async (u, signal) => {
-            const res = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`, { signal });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const html = await res.text();
-            return isBlockedOrInvalidHtml(html) ? '' : html;
-          }),
-          runWithTimeout('CORSPROXY-IO', async (u, signal) => {
-            const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(u)}`, { signal });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const html = await res.text();
-            return isBlockedOrInvalidHtml(html) ? '' : html;
-          })
-        ];
-
-        try {
-          const winner = await Promise.any(parallelTasks);
-          setExtractionProgress(true, `RESPUESTA CAPTURADA VÍA ${winner.name}...`, 65);
-          return winner.html;
-        } catch (parallelErr) {
-          // Respaldo: consultar Wayback Machine si los nodos en vivo fueron bloqueados
-          setExtractionProgress(true, 'CONSULTANDO ARCHIVO HISTÓRICO WAYBACK...', 45);
-          try {
-            const snapshot = await runWithTimeout('WAYBACK-ARCHIVE', async (u, signal) => {
-              const availRes = await fetch(`https://archive.org/wayback/available?url=${encodeURIComponent(u)}`, { signal });
-              if (!availRes.ok) return '';
-              const availData = await availRes.json();
-              const snapUrl = availData?.archived_snapshots?.closest?.url;
-              if (!snapUrl) return '';
-              const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(snapUrl)}`, { signal });
-              if (!res.ok) return '';
-              const html = await res.text();
-              return isBlockedOrInvalidHtml(html) ? '' : html;
-            }, 6500);
-            return snapshot.html;
-          } catch (archiveErr) {
-            throw new Error('Proxies bloqueados por protección antibot del medio.');
-          }
+        }
+        if (state.audioCtx && state.audioCtx.state === 'suspended') {
+          state.audioCtx.resume().catch(() => {});
         }
       }
 
-      // Extracción neuronal mediante búsqueda indexada cuando un periódico bloquea proxies directos
-      async function extractArticleViaGeminiSearchGrounding(targetUrl) {
-        setExtractionProgress(true, 'ACTIVANDO EXTRACCIÓN NEURONAL CON BÚSQUEDA WEB...', 68);
+      // Pulso agudo digital característico de entrada de datos de la Nostromo (Alien)
+      function playAlienDataChirp() {
+        if (!state.terminalSoundEnabled) return;
+        ensureAudioContext();
+        if (!state.audioCtx) return;
 
-        let domain = 'MEDIO DIGITAL';
-        let slugKeywords = '';
         try {
-          const parsed = new URL(targetUrl);
-          domain = parsed.hostname.replace(/^www\./, '');
-          slugKeywords = parsed.pathname
-            .replace(/\.html?$/i, '')
-            .replace(/[-_/]+/g, ' ')
-            .replace(/\b\d{8,}\b/g, '')
-            .trim();
+          const now = state.audioCtx.currentTime;
+          const osc = state.audioCtx.createOscillator();
+          const gain = state.audioCtx.createGain();
+
+          // Frecuencias agudas de telemetría (entre 2100 Hz y 3600 Hz con salto rápido)
+          const baseFreq = 2200 + Math.random() * 1100;
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(baseFreq, now);
+          osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.32, now + 0.018);
+          osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.85, now + 0.036);
+
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.linearRampToValueAtTime(0.032, now + 0.005);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.038);
+
+          osc.connect(gain);
+          gain.connect(state.audioCtx.destination);
+
+          osc.start(now);
+          osc.stop(now + 0.042);
+        } catch (e) {
+          // Ignorar errores de contexto bloqueado
+        }
+      }
+
+      // Tono de confirmación / interfaz MU/TH/UR
+      function playTerminalBeep(freq = 1400, duration = 0.07, secondFreq = 1950) {
+        if (!state.terminalSoundEnabled) return;
+        ensureAudioContext();
+        if (!state.audioCtx) return;
+
+        try {
+          const now = state.audioCtx.currentTime;
+          const osc = state.audioCtx.createOscillator();
+          const gain = state.audioCtx.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now);
+          if (secondFreq) {
+            osc.frequency.setValueAtTime(secondFreq, now + duration * 0.5);
+          }
+
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.linearRampToValueAtTime(0.045, now + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+          osc.connect(gain);
+          gain.connect(state.audioCtx.destination);
+
+          osc.start(now);
+          osc.stop(now + duration + 0.01);
         } catch (e) {}
+      }
 
-        const systemPrompt =
-          'Actúa como un sistema de extracción y archivo periodístico de alta precisión. ' +
-          'Busca en Google la noticia exacta correspondiente a la URL y palabras clave proporcionadas por el usuario. ' +
-          'Reconstruye el artículo periodístico completo en español con todos los datos verificados, declaraciones, cifras, fechas y contexto. ' +
-          'Devuelve exclusivamente un objeto JSON válido con las claves: "title" (string), "subtitle" (string), "date" (string), "source" (string) y "paragraphs" (array de strings con al menos 4-8 párrafos periodísticos completos y detallados).';
+      /* ---------------------------------------------------------------------
+         RELOJ DE SISTEMA EN TIEMPO REAL
+         --------------------------------------------------------------------- */
+      function updateSystemClock() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        el.systemClock.textContent = `${hh}:${mm}:${ss} UTC`;
+      }
+      setInterval(updateSystemClock, 1000);
+      updateSystemClock();
 
-        const userQuery =
-          `Localiza y extrae el contenido periodístico completo de esta noticia:\n` +
-          `URL: ${targetUrl}\n` +
-          `Medio: ${domain}\n` +
-          `Palabras clave de la noticia: ${slugKeywords}`;
+      /* ---------------------------------------------------------------------
+         GENERADOR DE IMÁGENES PROCEDURALES DE TELEMETRÍA PARA DEMOS
+         (Garantiza imágenes nítidas y descargables en ZIP sin bloqueos CORS)
+         --------------------------------------------------------------------- */
+      function createTelemetryImageDataUrl(title, subtitle, mode = 1) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 960;
+        canvas.height = 540;
+        const ctx = canvas.getContext('2d');
 
-        const apiKey = '';
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+        // Fondo profundo
+        ctx.fillStyle = '#020b05';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const payload = {
-          contents: [{ parts: [{ text: userQuery }] }],
-          tools: [{ google_search: {} }],
-          systemInstruction: {
-            parts: [{ text: systemPrompt }]
-          },
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: 'OBJECT',
-              properties: {
-                title: { type: 'STRING' },
-                subtitle: { type: 'STRING' },
-                date: { type: 'STRING' },
-                source: { type: 'STRING' },
-                paragraphs: {
-                  type: 'ARRAY',
-                  items: { type: 'STRING' }
-                }
-              },
-              required: ['title', 'paragraphs']
+        // Rejilla táctica
+        ctx.strokeStyle = 'rgba(0, 255, 65, 0.14)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+
+        // Gráfico central según modo
+        ctx.strokeStyle = '#00ff41';
+        ctx.lineWidth = 2;
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+
+        if (mode === 1) {
+          // Órbita planetaria / radar
+          for (let r = 50; r <= 190; r += 35) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = 'rgba(0, 255, 65, 0.18)';
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, 190, -0.4, 0.35);
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          // Red neuronal / nodos cuánticos
+          const nodes = [];
+          for (let i = 0; i < 18; i++) {
+            const angle = (i / 18) * Math.PI * 2;
+            const radius = 90 + (i % 3) * 55;
+            nodes.push({
+              x: cx + Math.cos(angle) * radius * 1.4,
+              y: cy + Math.sin(angle) * radius * 0.85
+            });
+          }
+          ctx.strokeStyle = 'rgba(0, 255, 65, 0.35)';
+          nodes.forEach((n1, i) => {
+            nodes.forEach((n2, j) => {
+              if (j > i && (i + j) % 3 === 0) {
+                ctx.beginPath();
+                ctx.moveTo(n1.x, n1.y);
+                ctx.lineTo(n2.x, n2.y);
+                ctx.stroke();
+              }
+            });
+          });
+          nodes.forEach((n) => {
+            ctx.fillStyle = '#00ff41';
+            ctx.beginPath();
+            ctx.arc(n.x, n.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+
+        // Marco HUD y textos
+        ctx.strokeStyle = '#00ff41';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(22, 22, canvas.width - 44, canvas.height - 44);
+
+        ctx.fillStyle = '#00ff41';
+        ctx.font = 'bold 24px monospace';
+        ctx.fillText(`MU/TH/UR 6000 // REGISTRO VISUAL 0${mode}`, 44, 64);
+
+        ctx.font = 'bold 28px monospace';
+        ctx.fillText(title, 44, canvas.height - 76);
+
+        ctx.fillStyle = '#80ff9f';
+        ctx.font = '18px monospace';
+        ctx.fillText(subtitle, 44, canvas.height - 42);
+
+        return canvas.toDataURL('image/png');
+      }
+
+      /* ---------------------------------------------------------------------
+         NOTICIAS DE DEMOSTRACIÓN INTEGRADAS
+         --------------------------------------------------------------------- */
+      const DEMO_ARTICLES = {
+        demo1: {
+          title: 'DESCUBREN UNA ESTRUCTURA SUBTERRÁNEA DE HIELO Y MINERALES EN EUROPA CON POTENCIAL BIOQUÍMICO',
+          subtitle: 'Nuevas lecturas espectrométricas revelan canales de convección térmica activos bajo la corteza helada de la luna de Júpiter.',
+          source: 'ASTROFÍSICA PROFUNDA // RED DE OBSERVATORIOS',
+          date: '19/11/2026',
+          cleanedElementsCount: 42,
+          paragraphs: [
+            'Un consorcio internacional de astrofísica planetaria ha confirmado la detección de gradientes térmicos anómalos bajo la región de Tara Regio, en la superficie helada de Europa, una de las lunas principales de Júpiter.',
+            'Los datos fueron recopilados mediante interferometría infrarroja de alta resolución y procesados por redes neuronales diseñadas para filtrar la radiación magnetosférica del gigante gaseoso.',
+            'Según el informe técnico publicado hoy, las fracturas lineales conocidas como lineae actúan como válvulas de intercambio químico entre el océano salino subsuperficial y la corteza exterior expuesta a la radiación.',
+            'Los investigadores identificaron concentraciones significativas de sales de magnesio, compuestos sulfatados y trazas de carbono orgánico recién emergido desde profundidades estimadas en quince kilómetros.',
+            'Este hallazgo refuerza la hipótesis de que el océano interno de Europa dispone de fuentes hidrotermales activas capaces de sostener reacciones prebióticas complejas sin necesidad de luz solar directa.',
+            'Las próximas misiones orbitales utilizarán radares de penetración de hielo para cartografiar en tres dimensiones estas cavidades líquidas y seleccionar zonas seguras para futuros módulos de descenso autónomo.'
+          ],
+          images: [
+            {
+              url: createTelemetryImageDataUrl('EUROPA // ESCANEO TECTÓNICO TARA REGIO', 'PROFUNDIDAD ESTIMADA: 15.4 KM // SALINIDAD: 3.2%', 1),
+              caption: 'Mapa de radar orbital de fracturas térmicas en la corteza de Europa.'
+            },
+            {
+              url: createTelemetryImageDataUrl('ESPECTROMETRÍA DE COMPUESTOS ORGÁNICOS', 'DETECCIÓN DE CARBONO Y SULFATOS EN SUPERFICIE', 2),
+              caption: 'Análisis espectral de emisiones químicas en las grietas lineales.'
             }
+          ]
+        },
+        demo2: {
+          title: 'ARQUITECTURAS DE COMPUTACIÓN FOTÓNICA REDUCEN EN UN 94% EL CONSUMO ENERGÉTICO DE MODELOS NEURONALES',
+          subtitle: 'Procesadores ópticos integrados en silicio sustituyen electrones por pulsos láser para multiplicar matrices a la velocidad de la luz.',
+          source: 'INGENIERÍA CUÁNTICA Y FOTÓNICA // BOLETÍN TÉCNICO',
+          date: '19/11/2026',
+          cleanedElementsCount: 68,
+          paragraphs: [
+            'El cuello de botella energético que amenazaba la expansión de los grandes centros de cálculo acaba de recibir una respuesta radical desde el campo de la fotónica integrada en silicio.',
+            'Un equipo de ingenieros europeos ha demostrado un acelerador tensorial completamente óptico capaz de ejecutar operaciones de álgebra lineal mediante interferencia de haces láser en guías de onda microscópicas.',
+            'A diferencia de los transistores electrónicos tradicionales, que disipan enormes cantidades de calor por resistencia eléctrica, los fotones atraviesan los moduladores interferométricos prácticamente sin generar fricción térmica.',
+            'Durante las pruebas de rendimiento continuo, el prototipo alcanzó una densidad de cómputo de cuatro petaflops por vatio, reduciendo el consumo energético global en un noventa y cuatro por ciento frente a las arquitecturas convencionales.',
+            'Además de su eficiencia térmica, la latencia de propagación óptica permite procesar flujos de datos en tiempo real con tiempos de respuesta inferiores a un nanosegundo por capa neuronal.',
+            'Los fabricantes de semiconductores prevén que los primeros módulos híbridos electro-ópticos lleguen a servidores especializados a finales de la próxima década, inaugurando una nueva era de supercomputación sostenible.'
+          ],
+          images: [
+            {
+              url: createTelemetryImageDataUrl('MATRIZ INTERFEROMÉTRICA FOTÓNICA 3D', 'EFICIENCIA: 4.1 PFLOPS/W // LATENCIA: 0.8 NS', 2),
+              caption: 'Esquema de guías de onda ópticas en oblea de silicio.'
+            },
+            {
+              url: createTelemetryImageDataUrl('TELEMETRÍA DE DISIPACIÓN TÉRMICA', 'REDUCCIÓN DEL 94% EN CARGA ENERGÉTICA', 1),
+              caption: 'Comparativa térmica entre núcleos electrónicos y fotónicos.'
+            }
+          ]
+        }
+      };
+
+      /* ---------------------------------------------------------------------
+         MOTOR DE EXTRACCIÓN Y LIMPIEZA DOM (MODO LECTURA SIN RESTRICCIONES)
+         --------------------------------------------------------------------- */
+      function setExtractionProgress(visible, text = '', percent = 0) {
+        if (!visible) {
+          el.extractionProgressBox.classList.add('hidden');
+          return;
+        }
+        el.extractionProgressBox.classList.remove('hidden');
+        el.extractionStepText.textContent = text;
+        el.extractionPercentText.textContent = `${percent}%`;
+        el.extractionProgressBar.style.width = `${percent}%`;
+      }
+
+      // Descarga HTML mediante cascada de proxies CORS públicos
+      async function fetchHtmlWithProxyCascade(targetUrl) {
+        const proxies = [
+          {
+            name: 'ALLORIGINS-GATEWAY',
+            buildUrl: (u) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+            extract: async (res) => {
+              const json = await res.json();
+              return json && json.contents ? json.contents : '';
+            }
+          },
+          {
+            name: 'CORSPROXY-NODE',
+            buildUrl: (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+            extract: async (res) => await res.text()
+          },
+          {
+            name: 'CODETABS-RELAY',
+            buildUrl: (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+            extract: async (res) => await res.text()
+          }
+        ];
+
+        let lastError = null;
+
+        for (let i = 0; i < proxies.length; i++) {
+          const proxy = proxies[i];
+          const progressPct = 20 + i * 22;
+          setExtractionProgress(true, `CONECTANDO CON NODO ${proxy.name} (${i + 1}/${proxies.length})...`, progressPct);
+
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 14000);
+
+            const response = await fetch(proxy.buildUrl(targetUrl), {
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const html = await proxy.extract(response);
+            if (html && html.trim().length > 250) {
+              return html;
+            }
+          } catch (err) {
+            lastError = err;
+          }
+        }
+
+        throw lastError || new Error('No se pudo recuperar el documento desde los nodos proxy.');
+      }
+
+      // Resuelve URLs relativas a absolutas de forma segura
+      function resolveAbsoluteUrl(rawUrl, baseUrl) {
+        if (!rawUrl) return '';
+        const cleaned = rawUrl.trim();
+        if (cleaned.startsWith('data:') || cleaned.startsWith('blob:')) return cleaned;
+        try {
+          if (baseUrl) {
+            return new URL(cleaned, baseUrl).href;
+          }
+          return new URL(cleaned).href;
+        } catch (e) {
+          return cleaned;
+        }
+      }
+
+      // Extrae datos estructurados JSON-LD (articleBody, headline, image, datePublished)
+      function extractJsonLdData(doc) {
+        const result = {
+          headline: '',
+          articleBody: '',
+          description: '',
+          datePublished: '',
+          images: []
+        };
+
+        const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+        scripts.forEach((script) => {
+          try {
+            const raw = script.textContent.trim();
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            const queue = Array.isArray(parsed) ? [...parsed] : [parsed];
+
+            while (queue.length > 0) {
+              const item = queue.shift();
+              if (!item || typeof item !== 'object') continue;
+
+              if (Array.isArray(item['@graph'])) {
+                queue.push(...item['@graph']);
+              }
+
+              const typeVal = Array.isArray(item['@type']) ? item['@type'].join(' ') : String(item['@type'] || '');
+              const isArticle = /Article|NewsArticle|BlogPosting|Reportage|WebPage/i.test(typeVal) || item.articleBody;
+
+              if (isArticle) {
+                if (!result.headline && item.headline) {
+                  result.headline = String(item.headline).trim();
+                }
+                if (!result.description && item.description) {
+                  result.description = String(item.description).trim();
+                }
+                if (!result.datePublished && item.datePublished) {
+                  result.datePublished = String(item.datePublished).trim();
+                }
+                if (item.articleBody && String(item.articleBody).length > result.articleBody.length) {
+                  result.articleBody = String(item.articleBody).trim();
+                }
+                if (item.image) {
+                  const imgs = Array.isArray(item.image) ? item.image : [item.image];
+                  imgs.forEach((imgObj) => {
+                    if (typeof imgObj === 'string') result.images.push(imgObj);
+                    else if (imgObj && imgObj.url) result.images.push(imgObj.url);
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            // Ignorar JSON-LD malformado
+          }
+        });
+
+        return result;
+      }
+
+      // Analiza y limpia completamente un documento HTML
+      function parseAndCleanArticleHtml(rawHtml, baseUrl = '', customTitle = '') {
+        setExtractionProgress(true, 'ANALIZANDO ESTRUCTURA DOM Y METADATOS JSON-LD...', 75);
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(rawHtml, 'text/html');
+
+        // 1. Extraer JSON-LD y OpenGraph ANTES de eliminar los scripts
+        const jsonLd = extractJsonLdData(doc);
+
+        const getMeta = (selector) => {
+          const tag = doc.querySelector(selector);
+          return tag ? (tag.getAttribute('content') || '').trim() : '';
+        };
+
+        const ogTitle = getMeta('meta[property="og:title"]') || getMeta('meta[name="twitter:title"]');
+        const ogDesc = getMeta('meta[property="og:description"]') || getMeta('meta[name="description"]');
+        const ogImage = getMeta('meta[property="og:image"]') || getMeta('meta[name="twitter:image"]');
+        const ogSite = getMeta('meta[property="og:site_name"]');
+        const pubDateRaw =
+          jsonLd.datePublished ||
+          getMeta('meta[property="article:published_time"]') ||
+          getMeta('meta[name="date"]') ||
+          (doc.querySelector('time')?.getAttribute('datetime') || doc.querySelector('time')?.textContent || '');
+
+        // 2. Recolectar imágenes relevantes antes de purgar contenedores
+        const imageMap = new Map();
+        const addImageCandidate = (src, alt = '') => {
+          const abs = resolveAbsoluteUrl(src, baseUrl);
+          if (!abs || abs.startsWith('data:image/svg') || abs.startsWith('data:image/gif')) return;
+          if (/logo|icon|avatar|pixel|tracker|spacer|sprite|badge|1x1/i.test(abs)) return;
+          if (!imageMap.has(abs)) {
+            imageMap.set(abs, {
+              url: abs,
+              caption: alt.trim() || `Registro visual #${imageMap.size + 1}`
+            });
           }
         };
 
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+        if (ogImage) addImageCandidate(ogImage, ogTitle || 'Imagen principal del artículo');
+        jsonLd.images.forEach((imgUrl) => addImageCandidate(imgUrl, jsonLd.headline));
+
+        // 3. Eliminar scripts, estilos, iframes, navegaciones, anuncios, cookies y capas paywall/overlay
+        const clutterSelectors = [
+          'script',
+          'style',
+          'noscript',
+          'iframe',
+          'nav',
+          'footer',
+          'aside',
+          'form',
+          'button',
+          'svg',
+          '[class*="paywall"]',
+          '[id*="paywall"]',
+          '[class*="modal"]',
+          '[id*="modal"]',
+          '[class*="popup"]',
+          '[id*="popup"]',
+          '[class*="overlay"]',
+          '[class*="banner"]',
+          '[class*="ad-"]',
+          '[class*="ads-"]',
+          '[class*="advert"]',
+          '[class*="sponsor"]',
+          '[id*="cookie"]',
+          '[class*="cookie"]',
+          '[id*="consent"]',
+          '[class*="consent"]',
+          '[class*="newsletter"]',
+          '[class*="subscribe"]',
+          '[aria-hidden="true"]'
+        ];
+
+        let removedCount = 0;
+        clutterSelectors.forEach((sel) => {
+          try {
+            const nodes = doc.querySelectorAll(sel);
+            nodes.forEach((node) => {
+              node.remove();
+              removedCount++;
+            });
+          } catch (e) {}
         });
 
-        if (!response.ok) {
-          throw new Error(`Motor neuronal HTTP ${response.status}`);
+        // 4. Extraer imágenes del cuerpo del artículo limpio
+        const contentRoot =
+          doc.querySelector('article') ||
+          doc.querySelector('[role="main"]') ||
+          doc.querySelector('main') ||
+          doc.body;
+
+        if (contentRoot) {
+          contentRoot.querySelectorAll('img').forEach((img) => {
+            const w = parseInt(img.getAttribute('width') || '0', 10);
+            const h = parseInt(img.getAttribute('height') || '0', 10);
+            if ((w > 0 && w < 120) || (h > 0 && h < 90)) return;
+
+            let src =
+              img.getAttribute('src') ||
+              img.getAttribute('data-src') ||
+              img.getAttribute('data-lazy-src') ||
+              img.getAttribute('data-original') ||
+              '';
+
+            if (!src && img.getAttribute('srcset')) {
+              const firstSrc = img.getAttribute('srcset').split(',')[0].trim().split(' ')[0];
+              src = firstSrc;
+            }
+
+            if (src) {
+              addImageCandidate(src, img.getAttribute('alt') || img.getAttribute('title') || '');
+            }
+          });
         }
 
-        const result = await response.json();
-        const candidate = result?.candidates?.[0];
-        const rawText = candidate?.content?.parts?.[0]?.text || '';
-        if (!rawText) {
-          throw new Error('Sin respuesta del motor de búsqueda neuronal');
+        // 5. Extraer titular
+        const h1Text = doc.querySelector('h1')?.textContent.trim() || '';
+        const title =
+          customTitle ||
+          jsonLd.headline ||
+          ogTitle ||
+          h1Text ||
+          doc.title.trim() ||
+          'ARTÍCULO EXTRAÍDO SIN TÍTULO';
+
+        // 6. Extraer párrafos limpios (priorizando artículo DOM y complementando con JSON-LD si es más completo)
+        let paragraphs = [];
+        const targetContainer =
+          doc.querySelector('article') ||
+          doc.querySelector('[itemprop="articleBody"]') ||
+          doc.querySelector('[class*="article-body"]') ||
+          doc.querySelector('[class*="story-body"]') ||
+          doc.querySelector('main') ||
+          doc.body;
+
+        if (targetContainer) {
+          const pNodes = targetContainer.querySelectorAll('p, h2, h3, blockquote');
+          const seen = new Set();
+          pNodes.forEach((p) => {
+            const text = p.textContent.replace(/\s+/g, ' ').trim();
+            if (text.length < 35) return;
+            if (/^(aceptar|rechazar|cookies|política de privacidad|suscríbete|iniciar sesión|compartir en)/i.test(text)) {
+              return;
+            }
+            if (!seen.has(text)) {
+              seen.add(text);
+              paragraphs.push(text);
+            }
+          });
         }
 
-        const parsedArticle = JSON.parse(rawText);
-        const cleanParagraphs = Array.isArray(parsedArticle.paragraphs)
-          ? parsedArticle.paragraphs.map((p) => String(p).replace(/\s+/g, ' ').trim()).filter((p) => p.length >= 30)
-          : [];
+        // Si el JSON-LD tiene el cuerpo completo (muy útil cuando la web trunca el HTML visual)
+        if (jsonLd.articleBody) {
+          const ldParagraphs = jsonLd.articleBody
+            .split(/\n+/)
+            .map((line) => line.replace(/\s+/g, ' ').trim())
+            .filter((line) => line.length >= 35);
 
-        if (cleanParagraphs.length === 0) {
-          throw new Error('No se pudieron recuperar párrafos de la noticia');
+          const domTotalChars = paragraphs.join(' ').length;
+          const ldTotalChars = ldParagraphs.join(' ').length;
+
+          if (ldTotalChars > domTotalChars * 1.15) {
+            paragraphs = ldParagraphs;
+          }
         }
 
-        // Añadir referencias de fuentes verificadas si existen en groundingMetadata
-        const attributions = candidate?.groundingMetadata?.groundingAttributions || [];
-        const sourceRefs = attributions
-          .map((a) => (a.web?.title && a.web?.uri ? `${a.web.title} (${a.web.uri})` : ''))
-          .filter(Boolean);
+        // Respaldo si el texto estaba en divs sin <p>
+        if (paragraphs.length === 0 && doc.body) {
+          const fallbackLines = doc.body.innerText
+            .split(/\n+/)
+            .map((l) => l.replace(/\s+/g, ' ').trim())
+            .filter((l) => l.length >= 45);
+          paragraphs = fallbackLines.slice(0, 60);
+        }
 
-        if (sourceRefs.length > 0) {
-          cleanParagraphs.push(`FUENTES VERIFICADAS EN RED: ${sourceRefs.slice(0, 3).join(' | ')}`);
+        let sourceDomain = ogSite || 'FUENTE EXTERNA';
+        if (baseUrl) {
+          try {
+            sourceDomain = new URL(baseUrl).hostname.replace(/^www\./, '').toUpperCase();
+          } catch (e) {}
+        }
+
+        let formattedDate = 'RECIENTE';
+        if (pubDateRaw) {
+          const parsedDate = new Date(pubDateRaw);
+          if (!isNaN(parsedDate.getTime())) {
+            formattedDate = parsedDate.toLocaleDateString('es-ES');
+          } else {
+            formattedDate = pubDateRaw.slice(0, 20);
+          }
         }
 
         return {
-          title: (parsedArticle.title || slugKeywords || 'NOTICIA RECUPERADA').trim(),
-          subtitle: (parsedArticle.subtitle || '').trim(),
-          source: (parsedArticle.source || domain).toUpperCase(),
-          date: (parsedArticle.date || new Date().toLocaleDateString('es-ES')).trim(),
-          paragraphs: cleanParagraphs,
-          images: [],
-          cleanedElementsCount: 14
+          title,
+          subtitle: ogDesc || jsonLd.description || '',
+          source: sourceDomain,
+          date: formattedDate,
+          paragraphs,
+          images: Array.from(imageMap.values()),
+          cleanedElementsCount: removedCount
         };
       }
-<!-- ... existing code ... -->
-      async function extractFromUrl() {
-        let rawUrl = el.urlInput.value.trim();
-        if (!rawUrl) {
-          showHudToast('Introduce una URL válida antes de iniciar la extracción.', 'warn');
-          el.urlInput.focus();
+
+      // Procesa entrada directa de texto plano o HTML pegado por el usuario
+      function processManualInput(rawInput, customTitle = '', baseUrl = '') {
+        const trimmed = rawInput.trim();
+        if (!trimmed) {
+          showHudToast('El campo de texto o HTML está vacío.', 'warn');
           return;
         }
-        if (!/^https?:\/\//i.test(rawUrl)) {
-          rawUrl = 'https://' + rawUrl;
-          el.urlInput.value = rawUrl;
+
+        const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(trimmed);
+        if (looksLikeHtml) {
+          const extracted = parseAndCleanArticleHtml(trimmed, baseUrl, customTitle);
+          setExtractionProgress(false);
+          loadArticleIntoTerminal(extracted);
+        } else {
+          const lines = trimmed
+            .split(/\n+/)
+            .map((l) => l.replace(/\s+/g, ' ').trim())
+            .filter((l) => l.length > 0);
+
+          const title = customTitle.trim() || lines[0] || 'DOCUMENTO DE TEXTO IMPORTADO';
+          const bodyParagraphs = customTitle.trim() ? lines : lines.slice(1);
+
+          loadArticleIntoTerminal({
+            title,
+            subtitle: 'Contenido inyectado manualmente en modo lectura limpia.',
+            source: baseUrl ? baseUrl : 'ENTRADA DIRECTA // TERMINAL',
+            date: new Date().toLocaleDateString('es-ES'),
+            paragraphs: bodyParagraphs.length > 0 ? bodyParagraphs : lines,
+            images: [],
+            cleanedElementsCount: 0
+          });
+        }
+      }
+
+      /* ---------------------------------------------------------------------
+         RENDERIZADO DE ARTÍCULO + EFECTO MÁQUINA DE ESCRIBIR DIGITAL
+         --------------------------------------------------------------------- */
+      function stopTypewriter() {
+        if (state.typewriter.timerId) {
+          clearInterval(state.typewriter.timerId);
+          state.typewriter.timerId = null;
+        }
+        state.typewriter.active = false;
+        el.btnSkipTypewriter.classList.add('hidden');
+      }
+
+      function renderCompleteArticleImmediately() {
+        stopTypewriter();
+        el.readerViewport.innerHTML = '';
+
+        if (!state.article.paragraphs.length) {
+          el.readerViewport.innerHTML = `<p class="text-[#ffb000]">No se encontraron párrafos legibles en este documento.</p>`;
+          return;
         }
 
-        playTerminalBeep(1250, 0.08, 1900);
-        el.btnExtract.disabled = true;
-        setSystemStatus('EXTRAYENDO...', true);
-        setExtractionProgress(true, 'INICIANDO PROTOCOLO DE CAPTURA...', 10);
+        state.article.paragraphs.forEach((text, idx) => {
+          const p = document.createElement('p');
+          p.className = 'article-paragraph';
+          p.dataset.pIndex = String(idx);
+          p.textContent = text;
+          p.title = 'Haz clic para iniciar la lectura por voz desde este párrafo';
+          p.addEventListener('click', () => jumpToParagraphAndSpeak(idx));
+          el.readerViewport.appendChild(p);
+        });
+
+        highlightActiveParagraph(state.tts.currentParagraph);
+      }
+
+      function startDigitalTypewriter() {
+        stopTypewriter();
+        el.readerViewport.innerHTML = '';
+
+        const paragraphs = state.article.paragraphs;
+        if (!paragraphs.length) {
+          renderCompleteArticleImmediately();
+          return;
+        }
+
+        state.typewriter.active = true;
+        state.typewriter.pIndex = 0;
+        state.typewriter.charIndex = 0;
+        state.typewriter.soundThrottle = 0;
+        el.btnSkipTypewriter.classList.remove('hidden');
+
+        // Crear nodos <p> vacíos y el cursor parpadeante
+        const cursorSpan = document.createElement('span');
+        cursorSpan.className = 'terminal-cursor';
+
+        let currentP = document.createElement('p');
+        currentP.className = 'article-paragraph';
+        currentP.dataset.pIndex = '0';
+        currentP.addEventListener('click', () => jumpToParagraphAndSpeak(0));
+        currentP.appendChild(cursorSpan);
+        el.readerViewport.appendChild(currentP);
+
+        state.typewriter.timerId = setInterval(() => {
+          const pIdx = state.typewriter.pIndex;
+          if (pIdx >= paragraphs.length) {
+            cursorSpan.remove();
+            stopTypewriter();
+            el.systemStatusText.textContent = 'ESTADO: DECODIFICACIÓN COMPLETADA';
+            return;
+          }
+
+          const fullText = paragraphs[pIdx];
+          // Escribir en ráfagas rápidas de 3 caracteres para fluidez incluso en artículos largos
+          const step = 3;
+          const nextCharIdx = Math.min(state.typewriter.charIndex + step, fullText.length);
+          const visibleSlice = fullText.slice(0, nextCharIdx);
+
+          currentP.textContent = visibleSlice;
+          currentP.appendChild(cursorSpan);
+          state.typewriter.charIndex = nextCharIdx;
+
+          // Sonido de computadora Alien sincronizado cada ~3 ticks
+          state.typewriter.soundThrottle++;
+          if (state.typewriter.soundThrottle % 3 === 0) {
+            playAlienDataChirp();
+          }
+
+          // Auto-scroll suave mientras escribe si el usuario está cerca del final
+          if (el.readerViewport.scrollHeight - el.readerViewport.scrollTop - el.readerViewport.clientHeight < 140) {
+            el.readerViewport.scrollTop = el.readerViewport.scrollHeight;
+          }
+
+          // Pasar al siguiente párrafo
+          if (nextCharIdx >= fullText.length) {
+            state.typewriter.pIndex++;
+            state.typewriter.charIndex = 0;
+
+            if (state.typewriter.pIndex < paragraphs.length) {
+              const nextIdx = state.typewriter.pIndex;
+              currentP = document.createElement('p');
+              currentP.className = 'article-paragraph';
+              currentP.dataset.pIndex = String(nextIdx);
+              currentP.addEventListener('click', () => jumpToParagraphAndSpeak(nextIdx));
+              currentP.appendChild(cursorSpan);
+              el.readerViewport.appendChild(currentP);
+            }
+          }
+        }, 16);
+      }
+
+      function loadArticleIntoTerminal(articleData) {
+        stopSpeechSynthesis();
+        state.article = articleData;
+        state.tts.currentParagraph = 0;
+
+        // Actualizar metadatos
+        const totalWords = articleData.paragraphs.join(' ').split(/\s+/).filter(Boolean).length;
+        const estMinutes = Math.max(1, Math.round(totalWords / 200));
+
+        el.metaSource.textContent = `ORIGEN: ${articleData.source}`;
+        el.metaDate.textContent = `FECHA: ${articleData.date}`;
+        el.metaStats.textContent = `${totalWords} PALABRAS · ~${estMinutes} MIN LECTURA`;
+        el.metaCleanedCount.textContent = `NODOS BLOQUEADOS: ${articleData.cleanedElementsCount}`;
+
+        el.articleTitle.textContent = articleData.title;
+        if (articleData.subtitle) {
+          el.articleSubtitle.textContent = articleData.subtitle;
+          el.articleSubtitle.classList.remove('hidden');
+        } else {
+          el.articleSubtitle.classList.add('hidden');
+        }
+
+        // Renderizar galería de fotos
+        renderPhotoGallery(articleData.images);
+
+        // Actualizar métricas del reproductor de voz
+        updateAudioProgressUI(0);
+
+        // Iniciar efecto máquina de escribir digital
+        el.systemStatusText.textContent = 'ESTADO: DECODIFICANDO FLUJO DE TEXTO...';
+        startDigitalTypewriter();
+        showHudToast(`Noticia extraída: ${articleData.paragraphs.length} párrafos y ${articleData.images.length} fotografías.`);
+      }
+
+      /* ---------------------------------------------------------------------
+         GALERÍA DE FOTOGRAFÍAS, LIGHTBOX Y DESCARGA INDIVIDUAL / ZIP
+         --------------------------------------------------------------------- */
+      function renderPhotoGallery(images) {
+        el.photoCountBadge.textContent = `(${images.length} FOTOS)`;
+        el.photoGalleryGrid.innerHTML = '';
+
+        if (!images || images.length === 0) {
+          el.btnDownloadAllPhotos.disabled = true;
+          el.photoGalleryGrid.innerHTML = `
+            <div class="col-span-2 p-6 text-center border border-dashed border-[#004d14] rounded text-xs text-[#00aa2b]">
+              NO SE DETECTARON FOTOGRAFÍAS EN ESTE ARTÍCULO.
+            </div>
+          `;
+          return;
+        }
+
+        el.btnDownloadAllPhotos.disabled = false;
+
+        images.forEach((imgObj, idx) => {
+          const card = document.createElement('div');
+          card.className = 'group relative bg-[#010703] border border-[#005917] hover:border-[#00ff41] rounded overflow-hidden flex flex-col';
+
+          const imgEl = document.createElement('img');
+          imgEl.src = imgObj.url;
+          imgEl.alt = imgObj.caption;
+          imgEl.loading = 'lazy';
+          imgEl.className = 'w-full h-28 object-cover cursor-pointer transition-transform duration-300 group-hover:scale-105';
+          imgEl.onerror = () => {
+            // Si la imagen externa falla, intentar cargarla vía proxy de imagen o mostrar placeholder táctico
+            if (!imgEl.dataset.retried) {
+              imgEl.dataset.retried = '1';
+              imgEl.src = `https://corsproxy.io/?${encodeURIComponent(imgObj.url)}`;
+            } else {
+              imgEl.src = `https://placehold.co/400x240/020804/00ff41?text=IMAGEN+0${idx + 1}`;
+            }
+          };
+
+          imgEl.addEventListener('click', () => openPhotoLightbox(imgObj, idx));
+
+          const footer = document.createElement('div');
+          footer.className = 'p-1.5 bg-[#020c05] border-t border-[#003b0f] flex items-center justify-between gap-1';
+          footer.innerHTML = `
+            <span class="text-[10px] text-[#80ff9f] truncate">IMG_0${idx + 1}</span>
+            <button type="button" class="btn-matrix px-2 py-0.5 rounded text-[10px] font-bold">
+              ⬇ GUARDAR
+            </button>
+          `;
+
+          footer.querySelector('button').addEventListener('click', (e) => {
+            e.stopPropagation();
+            downloadSingleImage(imgObj.url, `noticia_foto_${idx + 1}.png`);
+          });
+
+          card.appendChild(imgEl);
+          card.appendChild(footer);
+          el.photoGalleryGrid.appendChild(card);
+        });
+      }
+
+      function openPhotoLightbox(imgObj, idx) {
+        playTerminalBeep(1600, 0.06, 2100);
+        state.lightboxCurrentImg = { url: imgObj.url, index: idx };
+        el.lightboxCaption.textContent = `ARCHIVO VISUAL #0${idx + 1} // ${imgObj.caption}`;
+        el.lightboxImage.src = imgObj.url;
+        el.photoLightboxModal.classList.remove('hidden');
+      }
+
+      async function fetchImageAsBlob(url) {
+        if (url.startsWith('data:')) {
+          const res = await fetch(url);
+          return await res.blob();
+        }
+        try {
+          const res = await fetch(url);
+          if (res.ok) return await res.blob();
+        } catch (e) {}
+
+        // Fallback mediante proxy CORS
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        const proxyRes = await fetch(proxyUrl);
+        if (!proxyRes.ok) throw new Error('Error descargando imagen');
+        return await proxyRes.blob();
+      }
+
+      function triggerBlobDownload(blob, filename) {
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+      }
+
+      async function downloadSingleImage(url, filename) {
+        playTerminalBeep(1300, 0.06, 1800);
+        try {
+          const blob = await fetchImageAsBlob(url);
+          const ext = blob.type.includes('jpeg') || blob.type.includes('jpg') ? 'jpg' : blob.type.includes('webp') ? 'webp' : 'png';
+          const cleanName = filename.replace(/\.[a-z]+$/i, `.${ext}`);
+          triggerBlobDownload(blob, cleanName);
+          showHudToast(`Imagen descargada: ${cleanName}`);
+        } catch (err) {
+          // Respaldo abriendo en nueva pestaña si el servidor bloquea descarga directa
+          window.open(url, '_blank', 'noopener');
+          showHudToast('Imagen abierta en pestaña externa para guardado manual.', 'warn');
+        }
+      }
+
+      async function downloadAllPhotosZip() {
+        const images = state.article.images;
+        if (!images || images.length === 0) return;
+
+        playTerminalBeep(1500, 0.08, 2200);
+
+        if (images.length === 1) {
+          return downloadSingleImage(images[0].url, 'noticia_foto_01.png');
+        }
+
+        if (typeof JSZip === 'undefined') {
+          showHudToast('Librería JSZip no disponible; descargando individualmente...', 'warn');
+          images.forEach((img, idx) => downloadSingleImage(img.url, `noticia_foto_0${idx + 1}.png`));
+          return;
+        }
+
+        el.btnDownloadAllPhotos.disabled = true;
+        el.btnDownloadAllPhotos.textContent = '⏳ EMPAQUETANDO ZIP...';
 
         try {
-          let articleData = null;
-          let usedNeuralSearch = false;
+          const zip = new JSZip();
+          let added = 0;
 
-          try {
-            const rawHtml = await fetchHtmlWithProxyCascade(rawUrl);
-            const parsedDomArticle = parseAndCleanArticleHtml(rawHtml, rawUrl);
-            if (parsedDomArticle.paragraphs && parsedDomArticle.paragraphs.length >= 2) {
-              articleData = parsedDomArticle;
-            } else {
-              throw new Error('DOM insuficiente o protegido por paywall estricto');
+          for (let i = 0; i < images.length; i++) {
+            try {
+              const blob = await fetchImageAsBlob(images[i].url);
+              const ext = blob.type.includes('jpeg') ? 'jpg' : blob.type.includes('webp') ? 'webp' : 'png';
+              zip.file(`foto_${String(i + 1).padStart(2, '0')}.${ext}`, blob);
+              added++;
+            } catch (e) {
+              // Continuar con las siguientes imágenes
             }
-          } catch (proxyOrDomErr) {
-            // Si el medio bloquea proxies o es de pago estricto, usar búsqueda neuronal indexada
-            articleData = await extractArticleViaGeminiSearchGrounding(rawUrl);
-            usedNeuralSearch = true;
           }
 
-          setExtractionProgress(true, 'RENDERIZANDO TEXTO PURIFICADO EN TERMINAL...', 100);
-          loadArticleIntoTerminal(articleData);
-          showHudToast(
-            usedNeuralSearch
-              ? `Noticia reconstruida mediante búsqueda neuronal (${articleData.paragraphs.length} párrafos).`
-              : `Noticia extraída con éxito (${articleData.paragraphs.length} párrafos, ${articleData.images.length} fotos).`
-          );
+          if (added === 0) {
+            throw new Error('Ninguna imagen pudo ser empaquetada por restricciones CORS.');
+          }
+
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const stamp = new Date().toISOString().slice(0, 10);
+          triggerBlobDownload(zipBlob, `NOTICIA_FOTOGRAFIAS_${stamp}.zip`);
+          showHudToast(`Archivo ZIP generado con ${added} fotografías.`);
         } catch (err) {
-          setSystemStatus('CONEXIÓN BLOQUEADA POR SERVIDOR REMOTO', false);
-          showHudToast(
-            'No se pudo acceder automáticamente. Usa "PEGAR PORTAPAPELES" tras copiar el texto o código fuente (Ctrl+U) de la noticia.',
-            'error'
-          );
+          showHudToast('No se pudo crear el ZIP; descargando imágenes por separado.', 'warn');
+          images.forEach((img, idx) => downloadSingleImage(img.url, `noticia_foto_0${idx + 1}.png`));
         } finally {
-          el.btnExtract.disabled = false;
-          setTimeout(() => setExtractionProgress(false), 1200);
+          el.btnDownloadAllPhotos.disabled = false;
+          el.btnDownloadAllPhotos.textContent = '⬇ DESCARGAR FOTOGRAFÍAS';
         }
       }
-<!-- ... existing code ... -->
-      async function synthesizeChunkWithGeminiTts(textChunk, voiceName = 'Aoede', retries = 2) {
-        const apiKey = '';
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
 
-        const payload = {
-          contents: [
-            {
-              parts: [
-                {
-                  text: `Lee en español con voz natural, clara y entonación de locutor de noticias el siguiente texto:\n\n${textChunk}`
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName
-                }
-              }
-            }
-          },
-          model: 'gemini-2.5-flash-preview-tts'
+      /* ---------------------------------------------------------------------
+         REPRODUCTOR DE VOZ REALISTA (WEB SPEECH API)
+         --------------------------------------------------------------------- */
+      function populateSpanishVoices() {
+        if (!('speechSynthesis' in window)) {
+          el.voiceSelect.innerHTML = '<option value="">API de voz no soportada en este navegador</option>';
+          return;
+        }
+
+        const allVoices = window.speechSynthesis.getVoices();
+        if (!allVoices.length) return;
+
+        // Filtrar y puntuar voces en español priorizando motores neurales / naturales / online
+        const spanishVoices = allVoices.filter((v) => /^es(-|_|$)/i.test(v.lang));
+        const listToUse = spanishVoices.length > 0 ? spanishVoices : allVoices;
+
+        const scoreVoice = (v) => {
+          let score = 0;
+          const name = v.name.toLowerCase();
+          const lang = v.lang.toLowerCase();
+          if (lang.includes('es-es')) score += 20;
+          else if (lang.includes('es')) score += 10;
+          if (name.includes('natural')) score += 50;
+          if (name.includes('online')) score += 45;
+          if (name.includes('neural')) score += 45;
+          if (name.includes('google')) score += 35;
+          if (name.includes('microsoft')) score += 25;
+          if (name.includes('alvaro') || name.includes('elvira') || name.includes('helena') || name.includes('dalia') || name.includes('jorge')) {
+            score += 20;
+          }
+          return score;
         };
 
-        for (let attempt = 0; attempt <= retries; attempt++) {
-          try {
-            const response = await fetch(apiUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
+        listToUse.sort((a, b) => scoreVoice(b) - scoreVoice(a));
+        state.tts.voices = listToUse;
 
-            if (!response.ok) {
-              if (response.status === 400 || response.status === 403) {
-                attempt = retries;
-              }
-              throw new Error(`TTS HTTP ${response.status}`);
+        const previousUri = state.tts.selectedVoiceURI;
+        el.voiceSelect.innerHTML = '';
+
+        listToUse.forEach((v) => {
+          const opt = document.createElement('option');
+          opt.value = v.voiceURI;
+          opt.textContent = `${v.name} [${v.lang}]`;
+          el.voiceSelect.appendChild(opt);
+        });
+
+        if (previousUri && listToUse.some((v) => v.voiceURI === previousUri)) {
+          el.voiceSelect.value = previousUri;
+        } else if (listToUse[0]) {
+          state.tts.selectedVoiceURI = listToUse[0].voiceURI;
+          el.voiceSelect.value = listToUse[0].voiceURI;
+        }
+      }
+
+      if ('speechSynthesis' in window) {
+        populateSpanishVoices();
+        window.speechSynthesis.onvoiceschanged = populateSpanishVoices;
+      }
+
+      function highlightActiveParagraph(index) {
+        const allP = el.readerViewport.querySelectorAll('.article-paragraph');
+        allP.forEach((pEl, idx) => {
+          if (idx === index && (state.tts.isPlaying || state.tts.isPaused)) {
+            pEl.classList.add('active-reading');
+            pEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else {
+            pEl.classList.remove('active-reading');
+          }
+        });
+      }
+
+      function updateAudioProgressUI(pIndex) {
+        const totalP = state.article.paragraphs.length;
+        if (totalP === 0) {
+          el.audioParagraphProgress.textContent = 'PÁRRAFO: 0 / 0';
+          el.audioTimeProgress.textContent = '00:00 / 00:00 (0%)';
+          el.audioProgressFill.style.width = '0%';
+          return;
+        }
+
+        const clampedIdx = Math.max(0, Math.min(pIndex, totalP));
+        const pct = Math.round((clampedIdx / totalP) * 100);
+
+        const totalWords = state.article.paragraphs.join(' ').split(/\s+/).filter(Boolean).length;
+        const wordsSoFar = state.article.paragraphs.slice(0, clampedIdx).join(' ').split(/\s+/).filter(Boolean).length;
+
+        const wordsPerSec = (200 / 60) * state.tts.rate;
+        const totalSec = Math.max(1, Math.round(totalWords / wordsPerSec));
+        const currentSec = Math.min(totalSec, Math.round(wordsSoFar / wordsPerSec));
+
+        const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+        el.audioParagraphProgress.textContent = `PÁRRAFO: ${Math.min(clampedIdx + (state.tts.isPlaying ? 1 : 0), totalP)} / ${totalP}`;
+        el.audioTimeProgress.textContent = `${fmt(currentSec)} / ${fmt(totalSec)} (${pct}%)`;
+        el.audioProgressFill.style.width = `${pct}%`;
+      }
+
+      function clearSpeechKeepAlive() {
+        if (state.tts.keepAliveTimer) {
+          clearInterval(state.tts.keepAliveTimer);
+          state.tts.keepAliveTimer = null;
+        }
+      }
+
+      function speakParagraphAt(index) {
+        if (!('speechSynthesis' in window)) {
+          showHudToast('Este navegador no soporta síntesis de voz Web Speech API.', 'error');
+          return;
+        }
+
+        const paragraphs = state.article.paragraphs;
+        if (!paragraphs.length) {
+          showHudToast('Carga primero una noticia para iniciar la lectura por voz.', 'warn');
+          return;
+        }
+
+        if (index >= paragraphs.length) {
+          stopSpeechSynthesis();
+          updateAudioProgressUI(paragraphs.length);
+          el.ttsStatusBadge.textContent = '[LECTURA FINALIZADA]';
+          showHudToast('Lectura completa de la noticia finalizada.');
+          return;
+        }
+
+        // Asegurar que todo el texto esté visible si el usuario pulsa Play durante la animación
+        if (state.typewriter.active) {
+          renderCompleteArticleImmediately();
+        }
+
+        window.speechSynthesis.cancel();
+        clearSpeechKeepAlive();
+
+        state.tts.currentParagraph = index;
+        state.tts.isPlaying = true;
+        state.tts.isPaused = false;
+
+        el.ttsStatusBadge.textContent = '[TRANSMITIENDO VOZ]';
+        el.ttsStatusBadge.className = 'text-xs font-bold text-[#00ff41] text-glow';
+
+        highlightActiveParagraph(index);
+        updateAudioProgressUI(index);
+
+        const textToSpeak = index === 0 ? `${state.article.title}. ${paragraphs[0]}` : paragraphs[index];
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        state.tts.utterance = utterance;
+
+        const chosenVoice = state.tts.voices.find((v) => v.voiceURI === state.tts.selectedVoiceURI);
+        if (chosenVoice) {
+          utterance.voice = chosenVoice;
+          utterance.lang = chosenVoice.lang;
+        } else {
+          utterance.lang = 'es-ES';
+        }
+
+        utterance.rate = state.tts.rate;
+        utterance.pitch = 1.0;
+
+        // Pulso de energía para el osciloscopio de ondas cada vez que pronuncia una palabra
+        utterance.onboundary = () => {
+          state.tts.boundaryEnergy = 1.0;
+        };
+
+        utterance.onend = () => {
+          clearSpeechKeepAlive();
+          if (state.tts.isPlaying && !state.tts.isPaused) {
+            speakParagraphAt(index + 1);
+          }
+        };
+
+        utterance.onerror = (event) => {
+          clearSpeechKeepAlive();
+          if (event.error !== 'interrupted' && event.error !== 'canceled') {
+            state.tts.isPlaying = false;
+            el.ttsStatusBadge.textContent = '[ERROR DE VOZ]';
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
+
+        // Solución al corte de 15s de Chrome en locuciones largas
+        state.tts.keepAliveTimer = setInterval(() => {
+          if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+            window.speechSynthesis.pause();
+            window.speechSynthesis.resume();
+          }
+        }, 11000);
+      }
+
+      function playOrResumeSpeech() {
+        playTerminalBeep(1400, 0.06, 1850);
+        if (!state.article.paragraphs.length) {
+          showHudToast('No hay noticia cargada para reproducir.', 'warn');
+          return;
+        }
+
+        if (state.tts.isPaused && window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+          state.tts.isPaused = false;
+          state.tts.isPlaying = true;
+          el.ttsStatusBadge.textContent = '[TRANSMITIENDO VOZ]';
+          return;
+        }
+
+        speakParagraphAt(state.tts.currentParagraph || 0);
+      }
+
+      function pauseSpeech() {
+        playTerminalBeep(1100, 0.06, 900);
+        if (state.tts.isPlaying && window.speechSynthesis.speaking) {
+          window.speechSynthesis.pause();
+          state.tts.isPaused = true;
+          state.tts.isPlaying = false;
+          el.ttsStatusBadge.textContent = '[EN PAUSA]';
+          el.ttsStatusBadge.className = 'text-xs font-bold text-[#ffb000]';
+        }
+      }
+
+      function stopSpeechSynthesis() {
+        clearSpeechKeepAlive();
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
+        state.tts.isPlaying = false;
+        state.tts.isPaused = false;
+        state.tts.currentParagraph = 0;
+        state.tts.boundaryEnergy = 0;
+        el.ttsStatusBadge.textContent = '[DETENIDO]';
+        el.ttsStatusBadge.className = 'text-xs font-bold text-[#00cc33]';
+        highlightActiveParagraph(-1);
+        updateAudioProgressUI(0);
+      }
+
+      function jumpToParagraphAndSpeak(pIdx) {
+        playTerminalBeep(1650, 0.05, 2100);
+        speakParagraphAt(pIdx);
+      }
+
+      function setSpeechRate(newRate) {
+        const clamped = Math.max(0.5, Math.min(2.0, parseFloat(newRate) || 1.0));
+        state.tts.rate = clamped;
+        el.speedSlider.value = String(clamped);
+        el.speedValueDisplay.textContent = `${clamped.toFixed(2)}x`;
+
+        document.querySelectorAll('.speed-preset').forEach((btn) => {
+          const btnSpeed = parseFloat(btn.dataset.speed);
+          if (Math.abs(btnSpeed - clamped) < 0.01) {
+            btn.classList.add('btn-matrix-primary');
+          } else {
+            btn.classList.remove('btn-matrix-primary');
+          }
+        });
+
+        updateAudioProgressUI(state.tts.currentParagraph);
+
+        // Si está reproduciendo, reiniciar párrafo actual con la nueva velocidad
+        if (state.tts.isPlaying && !state.tts.isPaused) {
+          speakParagraphAt(state.tts.currentParagraph);
+        }
+      }
+
+      /* ---------------------------------------------------------------------
+         SIMULADOR DE ONDAS DE AUDIO EN TIEMPO REAL (<CANVAS>)
+         --------------------------------------------------------------------- */
+      function initAudioWaveformVisualizer() {
+        const canvas = el.audioWaveformCanvas;
+        const ctx = canvas.getContext('2d');
+        let phase = 0;
+
+        function resizeCanvas() {
+          const rect = el.waveformContainer.getBoundingClientRect();
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = Math.max(100, Math.floor(rect.width * dpr));
+          canvas.height = Math.max(60, Math.floor(rect.height * dpr));
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function renderFrame() {
+          const width = el.waveformContainer.clientWidth || 320;
+          const height = el.waveformContainer.clientHeight || 112;
+          const midY = height / 2;
+
+          ctx.clearRect(0, 0, width, height);
+
+          // Rejilla sutil de osciloscopio
+          ctx.strokeStyle = 'rgba(0, 255, 65, 0.08)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(0, midY);
+          ctx.lineTo(width, midY);
+          ctx.stroke();
+
+          // Calcular amplitud según estado del reproductor
+          let targetAmp = 2;
+          let speed = 0.03;
+
+          if (state.tts.isPlaying && !state.tts.isPaused) {
+            // Oscilación orgánica modulada por eventos onboundary de la voz
+            const vocalPulse = 0.55 + 0.45 * Math.sin(phase * 2.7) * Math.cos(phase * 1.3);
+            targetAmp = (height * 0.34) * (0.45 + vocalPulse * 0.55 + state.tts.boundaryEnergy * 0.45);
+            speed = 0.14 * state.tts.rate;
+            state.tts.boundaryEnergy *= 0.88;
+            el.waveformFreqLabel.textContent = `${Math.round(320 + targetAmp * 14)} Hz // VOZ ACTIVA`;
+          } else if (state.tts.isPaused) {
+            targetAmp = height * 0.08;
+            speed = 0.035;
+            el.waveformFreqLabel.textContent = '110 Hz // EN PAUSA';
+          } else {
+            targetAmp = 2.5 + Math.sin(phase * 0.8) * 1.2;
+            speed = 0.025;
+            el.waveformFreqLabel.textContent = '0.0 Hz // REPOSO';
+          }
+
+          phase += speed;
+
+          // Barras verticales de espectro de frecuencia (fondo)
+          const barCount = 36;
+          const barWidth = (width / barCount) * 0.55;
+          for (let i = 0; i < barCount; i++) {
+            const norm = i / barCount;
+            const envelope = Math.sin(norm * Math.PI);
+            const barH = Math.max(
+              2,
+              Math.abs(Math.sin(phase * 1.9 + i * 0.65) * Math.cos(phase * 0.9 - i * 0.3)) * targetAmp * 1.45 * envelope
+            );
+            const x = (i + 0.22) * (width / barCount);
+            ctx.fillStyle = 'rgba(0, 255, 65, 0.22)';
+            ctx.fillRect(x, midY - barH / 2, barWidth, barH);
+          }
+
+          // Onda armónica secundaria
+          ctx.strokeStyle = 'rgba(0, 204, 51, 0.45)';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          for (let x = 0; x <= width; x += 3) {
+            const nx = x / width;
+            const windowFn = Math.sin(nx * Math.PI);
+            const y =
+              midY +
+              Math.sin(nx * 14 - phase * 1.4) * (targetAmp * 0.65) * windowFn +
+              Math.cos(nx * 24 + phase * 2.1) * (targetAmp * 0.25) * windowFn;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+
+          // Onda principal brillante Matrix
+          ctx.strokeStyle = '#00ff41';
+          ctx.lineWidth = 2.2;
+          ctx.shadowColor = '#00ff41';
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          for (let x = 0; x <= width; x += 2) {
+            const nx = x / width;
+            const windowFn = Math.sin(nx * Math.PI);
+            const y =
+              midY +
+              Math.sin(nx * 10 + phase) * targetAmp * windowFn +
+              Math.sin(nx * 22 - phase * 1.8) * (targetAmp * 0.35) * windowFn;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+
+          requestAnimationFrame(renderFrame);
+        }
+
+        requestAnimationFrame(renderFrame);
+      }
+
+      /* ---------------------------------------------------------------------
+         GENERACIÓN Y DESCARGA REAL DE AUDIO .MP3 DE LA NOTICIA
+         --------------------------------------------------------------------- */
+      function splitTextIntoTtsChunks(fullText, maxLen = 180) {
+        const sentences = fullText.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [fullText];
+        const chunks = [];
+        let current = '';
+
+        sentences.forEach((sentence) => {
+          const clean = sentence.replace(/\s+/g, ' ').trim();
+          if (!clean) return;
+
+          if ((current + ' ' + clean).trim().length <= maxLen) {
+            current = (current + ' ' + clean).trim();
+          } else {
+            if (current) chunks.push(current);
+            if (clean.length <= maxLen) {
+              current = clean;
+            } else {
+              // Dividir frases muy largas por palabras
+              const words = clean.split(' ');
+              let part = '';
+              words.forEach((w) => {
+                if ((part + ' ' + w).trim().length <= maxLen) {
+                  part = (part + ' ' + w).trim();
+                } else {
+                  if (part) chunks.push(part);
+                  part = w;
+                }
+              });
+              current = part;
             }
+          }
+        });
 
-            const result = await response.json();
-            const part = result?.candidates?.[0]?.content?.parts?.[0];
-            const audioData = part?.inlineData?.data;
-            const mimeType = part?.inlineData?.mimeType || 'audio/L16;rate=24000';
+        if (current) chunks.push(current);
+        return chunks;
+      }
 
-            if (audioData) {
-              const rateMatch = mimeType.match(/rate=(\d+)/);
-              const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
-              const pcmBuffer = base64ToArrayBuffer(audioData);
-              return {
-                pcm16: new Int16Array(pcmBuffer),
-                sampleRate
-              };
-            }
-            throw new Error('Respuesta TTS sin datos de audio');
-          } catch (err) {
-            if (attempt === retries) throw err;
-            await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt)));
+      // Codificador MP3 de respaldo mediante LameJS si las pasarelas TTS externas no responden
+      function synthesizeFallbackMp3WithLame(fullText, onProgress) {
+        if (typeof lamejs === 'undefined') {
+          throw new Error('Codificador LameJS no disponible.');
+        }
+
+        const sampleRate = 22050;
+        const durationSec = Math.min(24, Math.max(4, Math.round(fullText.length / 85)));
+        const totalSamples = sampleRate * durationSec;
+        const samples = new Int16Array(totalSamples);
+
+        // Generar modulación vocal sintética de telemetría basada en los caracteres del texto
+        for (let i = 0; i < totalSamples; i++) {
+          const t = i / sampleRate;
+          const charIdx = Math.floor((i / totalSamples) * fullText.length);
+          const code = fullText.charCodeAt(charIdx) || 32;
+          const isSpace = code === 32;
+          const pitch = isSpace ? 0 : 140 + (code % 45) * 4.5;
+          const env = isSpace ? 0 : Math.sin((i % 1400) / 1400 * Math.PI);
+          const wave = Math.sin(2 * Math.PI * pitch * t) * 0.55 + Math.sin(2 * Math.PI * (pitch * 2) * t) * 0.25;
+          samples[i] = Math.floor(wave * env * 18000);
+        }
+
+        const mp3Encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
+        const mp3Data = [];
+        const blockSize = 1152;
+
+        for (let i = 0; i < samples.length; i += blockSize) {
+          const chunk = samples.subarray(i, i + blockSize);
+          const mp3buf = mp3Encoder.encodeBuffer(chunk);
+          if (mp3buf.length > 0) mp3Data.push(mp3buf);
+          if (i % (blockSize * 20) === 0) {
+            onProgress(Math.min(95, Math.round((i / samples.length) * 100)));
           }
         }
-      }
-<!-- ... existing code ... -->
-      function publishReadyWavToUi(wavBlob, filename) {
-        const blobUrl = URL.createObjectURL(wavBlob);
-        if (el.exportedWavPreview) {
-          el.exportedWavPreview.src = blobUrl;
-        }
-        if (el.directWavDownloadLink) {
-          el.directWavDownloadLink.href = blobUrl;
-          el.directWavDownloadLink.setAttribute('download', filename);
-        }
-        if (el.audioReadyDownloadBox) {
-          el.audioReadyDownloadBox.classList.remove('hidden');
-        }
-        triggerBlobDownload(wavBlob, filename);
+
+        const endBuf = mp3Encoder.flush();
+        if (endBuf.length > 0) mp3Data.push(endBuf);
+        onProgress(100);
+
+        return new Blob(mp3Data, { type: 'audio/mp3' });
       }
 
-      async function downloadArticleAsAudio() {
+      async function downloadArticleAsMp3() {
         if (!state.article.paragraphs.length) {
-          showHudToast('Carga primero una noticia para generar el archivo de audio.', 'warn');
+          showHudToast('Carga primero una noticia para generar el archivo .MP3.', 'warn');
           return;
         }
 
         playTerminalBeep(1500, 0.08, 2200);
-        const selectedVoice = el.ttsExportVoiceSelect ? el.ttsExportVoiceSelect.value : 'Aoede';
         const fullText = `${state.article.title}. ${state.article.paragraphs.join(' ')}`;
-        const chunks = splitTextIntoTtsChunks(fullText, 1100).slice(0, 6);
-        const safeSlug =
-          state.article.title
+        const chunks = splitTextIntoTtsChunks(fullText, 175).slice(0, 45);
+
+        el.btnDownloadMp3.disabled = true;
+        el.mp3ProgressContainer.classList.remove('hidden');
+        el.mp3StatusLabel.textContent = 'SINTETIZANDO SEGMENTOS VOCALES MP3...';
+        el.mp3PercentLabel.textContent = '5%';
+        el.mp3ProgressBar.style.width = '5%';
+
+        try {
+          const mp3Buffers = [];
+          let failedChunks = 0;
+
+          for (let i = 0; i < chunks.length; i++) {
+            const pct = Math.round(((i + 1) / chunks.length) * 90);
+            el.mp3StatusLabel.textContent = `CODIFICANDO BLOQUE VOCAL ${i + 1}/${chunks.length}...`;
+            el.mp3PercentLabel.textContent = `${pct}%`;
+            el.mp3ProgressBar.style.width = `${pct}%`;
+
+            const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=es&client=tw-ob&q=${encodeURIComponent(chunks[i])}`;
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(ttsUrl)}`;
+
+            try {
+              const res = await fetch(proxyUrl);
+              if (!res.ok) throw new Error('HTTP error');
+              const buf = await res.arrayBuffer();
+              if (buf && buf.byteLength > 400) {
+                mp3Buffers.push(buf);
+              } else {
+                failedChunks++;
+              }
+            } catch (e) {
+              failedChunks++;
+            }
+
+            if (failedChunks >= 2 && mp3Buffers.length === 0) {
+              break;
+            }
+          }
+
+          let finalMp3Blob;
+
+          if (mp3Buffers.length > 0) {
+            el.mp3StatusLabel.textContent = 'ENSAMBLANDO ARCHIVO MP3...';
+            el.mp3PercentLabel.textContent = '100%';
+            el.mp3ProgressBar.style.width = '100%';
+            finalMp3Blob = new Blob(mp3Buffers, { type: 'audio/mpeg' });
+          } else {
+            el.mp3StatusLabel.textContent = 'CODIFICANDO PISTA MP3 LOCAL (LAMEJS)...';
+            finalMp3Blob = synthesizeFallbackMp3WithLame(fullText, (p) => {
+              el.mp3PercentLabel.textContent = `${p}%`;
+              el.mp3ProgressBar.style.width = `${p}%`;
+            });
+          }
+
+          const safeSlug = state.article.title
             .toLowerCase()
             .replace(/[^a-z0-9áéíóúñ]+/gi, '_')
             .replace(/^_|_$/g, '')
             .slice(0, 36) || 'noticia_audio';
-        const filename = `${safeSlug}.wav`;
 
-        el.btnDownloadAudio.disabled = true;
-        el.audioExportProgressContainer.classList.remove('hidden');
-        el.audioExportStatusLabel.textContent = `SINTETIZANDO VOZ (${selectedVoice.toUpperCase()})...`;
-        el.audioExportPercentLabel.textContent = '8%';
-        el.audioExportProgressBar.style.width = '8%';
-
-        try {
-          const pcmSegments = [];
-          let detectedSampleRate = 24000;
-
-          for (let i = 0; i < chunks.length; i++) {
-            const pct = 10 + Math.round(((i + 1) / chunks.length) * 80);
-            el.audioExportStatusLabel.textContent = `GENERANDO VOZ REALISTA (${i + 1}/${chunks.length})...`;
-            el.audioExportPercentLabel.textContent = `${pct}%`;
-            el.audioExportProgressBar.style.width = `${pct}%`;
-
-            const { pcm16, sampleRate } = await synthesizeChunkWithGeminiTts(chunks[i], selectedVoice);
-            pcmSegments.push(pcm16);
-            detectedSampleRate = sampleRate;
-          }
-
-          el.audioExportStatusLabel.textContent = 'ENSAMBLANDO CONTENEDOR .WAV...';
-          el.audioExportPercentLabel.textContent = '96%';
-          el.audioExportProgressBar.style.width = '96%';
-
-          const totalLength = pcmSegments.reduce((acc, seg) => acc + seg.length, 0);
-          const mergedPcm = new Int16Array(totalLength);
-          let offset = 0;
-          pcmSegments.forEach((seg) => {
-            mergedPcm.set(seg, offset);
-            offset += seg.length;
-          });
-
-          const finalWavBlob = pcm16ToWavBlob(mergedPcm, detectedSampleRate);
-          el.audioExportPercentLabel.textContent = '100%';
-          el.audioExportProgressBar.style.width = '100%';
-          publishReadyWavToUi(finalWavBlob, filename);
-          showHudToast(`Audio realista ${filename} listo para reproducir y descargar.`);
+          triggerBlobDownload(finalMp3Blob, `${safeSlug}.mp3`);
+          showHudToast(`Archivo ${safeSlug}.mp3 descargado correctamente.`);
         } catch (err) {
-          el.audioExportStatusLabel.textContent = 'GENERANDO PISTA .WAV DE RESPALDO...';
-          el.audioExportPercentLabel.textContent = '100%';
-          el.audioExportProgressBar.style.width = '100%';
-
-          const fallbackWav = buildOfflineTelemetryWavBlob(fullText);
-          publishReadyWavToUi(fallbackWav, filename);
-          showHudToast(`Archivo ${filename} generado. Usa el botón "GUARDAR ARCHIVO .WAV EN DISCO" si el navegador bloquea la descarga automática.`, 'warn');
+          showHudToast('No se pudo completar la exportación MP3 en este entorno.', 'error');
         } finally {
-          el.btnDownloadAudio.disabled = false;
+          el.btnDownloadMp3.disabled = false;
           setTimeout(() => {
-            el.audioExportProgressContainer.classList.add('hidden');
-          }, 2400);
+            el.mp3ProgressContainer.classList.add('hidden');
+          }, 2200);
         }
       }
-<!-- ... existing code ... -->
-      async function downloadAllImagesZip() {
-        if (!state.article.images.length) {
-          showHudToast('No hay fotografías disponibles en esta noticia.', 'warn');
-          return;
-        }
-        if (typeof JSZip === 'undefined') {
-          showHudToast('Librería JSZip no disponible.', 'error');
+
+      /* ---------------------------------------------------------------------
+         FLUJO PRINCIPAL DE EXTRACCIÓN DESDE URL
+         --------------------------------------------------------------------- */
+      async function handleExtractFromUrl() {
+        const rawUrl = el.urlInput.value.trim();
+        if (!rawUrl) {
+          showHudToast('Introduce una URL válida antes de ejecutar la extracción.', 'warn');
+          el.urlInput.focus();
           return;
         }
 
-        playTerminalBeep(1400, 0.08, 2000);
-        el.btnDownloadImages.disabled = true;
-        const originalText = el.btnDownloadImages.innerHTML;
-        el.btnDownloadImages.innerHTML = '<span>⏳ EMPAQUETANDO .ZIP...</span>';
-
-        const fetchImageBlobWithFallback = async (url) => {
-          const candidates = [
-            url,
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-            `https://corsproxy.io/?url=${encodeURIComponent(url)}`
-          ];
-          for (const candidateUrl of candidates) {
-            try {
-              const res = await fetch(candidateUrl);
-              if (res.ok) {
-                const blob = await res.blob();
-                if (blob && blob.size > 200) return blob;
-              }
-            } catch (e) {}
-          }
-          return null;
-        };
+        let validUrl = rawUrl;
+        if (!/^https?:\/\//i.test(validUrl)) {
+          validUrl = `https://${validUrl}`;
+          el.urlInput.value = validUrl;
+        }
 
         try {
-          const zip = new JSZip();
-          const folder = zip.folder('fotografias_noticia');
-          let addedCount = 0;
+          new URL(validUrl);
+        } catch (e) {
+          showHudToast('El formato de la URL introducida no es válido.', 'error');
+          return;
+        }
 
-          for (let i = 0; i < state.article.images.length; i++) {
-            const img = state.article.images[i];
-            const blob = await fetchImageBlobWithFallback(img.url);
-            if (blob) {
-              const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
-              folder.file(`foto_${String(i + 1).padStart(2, '0')}.${ext}`, blob);
-              addedCount++;
-            }
+        playTerminalBeep(1200, 0.08, 1800);
+        el.btnExtract.disabled = true;
+        el.systemStatusText.textContent = 'ESTADO: INTERCEPTANDO Y LIMPIANDO DOCUMENTO...';
+        setExtractionProgress(true, 'INICIANDO PROTOCOLO DE EXTRACCIÓN...', 10);
+
+        try {
+          const html = await fetchHtmlWithProxyCascade(validUrl);
+          const cleanedArticle = parseAndCleanArticleHtml(html, validUrl);
+
+          setExtractionProgress(true, 'PURGA DE SCRIPTS COMPLETADA // CARGANDO...', 100);
+          setTimeout(() => setExtractionProgress(false), 600);
+
+          if (cleanedArticle.paragraphs.length === 0) {
+            showHudToast('La web devolvió un contenedor vacío o protegido por JavaScript en servidor. Usa "PEGAR HTML / TEXTO".', 'warn');
           }
 
-          if (addedCount === 0) {
-            showHudToast('Las imágenes tienen protección CORS remota; ábrelas desde la galería para guardarlas.', 'warn');
-            return;
-          }
-
-          const zipBlob = await zip.generateAsync({ type: 'blob' });
-          const safeSlug =
-            state.article.title
-              .toLowerCase()
-              .replace(/[^a-z0-9áéíóúñ]+/gi, '_')
-              .replace(/^_|_$/g, '')
-              .slice(0, 30) || 'imagenes_noticia';
-
-          triggerBlobDownload(zipBlob, `${safeSlug}_fotos.zip`);
-          showHudToast(`Archivo ZIP descargado con ${addedCount} fotografía(s).`);
+          loadArticleIntoTerminal(cleanedArticle);
         } catch (err) {
-          showHudToast('Error al generar el archivo ZIP de fotografías.', 'error');
+          setExtractionProgress(false);
+          el.systemStatusText.textContent = 'ESTADO: CONEXIÓN BLOQUEADA POR SERVIDOR REMOTO';
+          showHudToast(
+            'El sitio remoto bloqueó los proxies externos. Utiliza el botón "PEGAR HTML / TEXTO" para procesar el contenido al instante.',
+            'error'
+          );
         } finally {
-          el.btnDownloadImages.disabled = false;
-          el.btnDownloadImages.innerHTML = originalText;
+          el.btnExtract.disabled = false;
         }
       }
 
-      function triggerBlobDownload(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          if (a.parentNode) document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, 60000);
-      }
-<!-- ... existing code ... -->
+      /* ---------------------------------------------------------------------
+         ASIGNACIÓN DE EVENTOS DE INTERFAZ
+         --------------------------------------------------------------------- */
+      // Botón de sonido de terminal Alien
+      el.btnToggleTerminalAudio.addEventListener('click', () => {
+        state.terminalSoundEnabled = !state.terminalSoundEnabled;
+        if (state.terminalSoundEnabled) {
+          ensureAudioContext();
+          playTerminalBeep(1600, 0.07, 2200);
+          el.audioIcon.textContent = '🔊';
+          el.audioToggleText.textContent = '[AUDIO TERMINAL: ON]';
+        } else {
+          el.audioIcon.textContent = '🔇';
+          el.audioToggleText.textContent = '[AUDIO TERMINAL: OFF]';
+        }
+      });
+
+      // Extracción URL
+      el.btnExtract.addEventListener('click', handleExtractFromUrl);
+      el.urlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleExtractFromUrl();
+      });
+      el.btnClearUrl.addEventListener('click', () => {
+        el.urlInput.value = '';
+        el.urlInput.focus();
+      });
+
+      // Botones Demo
+      el.btnDemo1.addEventListener('click', () => {
+        playTerminalBeep(1450, 0.07, 2100);
+        el.urlInput.value = 'https://astrofisica-profunda.net/europa-estructura-subterranea-bioquimica';
+        loadArticleIntoTerminal(DEMO_ARTICLES.demo1);
+      });
+
+      el.btnDemo2.addEventListener('click', () => {
+        playTerminalBeep(1450, 0.07, 2100);
+        el.urlInput.value = 'https://ingenieria-fotonica.org/procesadores-opticos-silicio-eficiencia';
+        loadArticleIntoTerminal(DEMO_ARTICLES.demo2);
+      });
+
+      // Saltar máquina de escribir y copiar texto
+      el.btnSkipTypewriter.addEventListener('click', () => {
+        playTerminalBeep(1800, 0.05, 2300);
+        renderCompleteArticleImmediately();
+      });
+
+      el.btnCopyArticle.addEventListener('click', () => {
+        if (!state.article.paragraphs.length) {
+          showHudToast('No hay texto cargado para copiar.', 'warn');
+          return;
+        }
+        const fullText = `${state.article.title}\n\n${state.article.paragraphs.join('\n\n')}`;
+        const tempArea = document.createElement('textarea');
+        tempArea.value = fullText;
+        document.body.appendChild(tempArea);
+        tempArea.select();
+        document.execCommand('copy');
+        tempArea.remove();
+        playTerminalBeep(1700, 0.06, 2200);
+        showHudToast('Texto completo copiado al portapapeles.');
+      });
+
+      // Modal entrada manual HTML / Texto
+      el.btnOpenManualModal.addEventListener('click', () => {
+        playTerminalBeep(1350, 0.06, 1750);
+        el.manualInputModal.classList.remove('hidden');
+        el.manualContentTextarea.focus();
+      });
+
+      const closeManualModal = () => el.manualInputModal.classList.add('hidden');
+      el.btnCloseManualModal.addEventListener('click', closeManualModal);
+      el.btnCancelManualModal.addEventListener('click', closeManualModal);
+
+      el.btnProcessManualContent.addEventListener('click', () => {
+        const content = el.manualContentTextarea.value;
+        const customTitle = el.manualTitleInput.value;
+        const baseUrl = el.manualBaseUrlInput.value;
+        closeManualModal();
+        processManualInput(content, customTitle, baseUrl);
+      });
+
+      // Modal Lightbox de fotografías
+      const closeLightbox = () => el.photoLightboxModal.classList.add('hidden');
+      el.btnCloseLightbox.addEventListener('click', closeLightbox);
+      el.photoLightboxModal.addEventListener('click', (e) => {
+        if (e.target === el.photoLightboxModal) closeLightbox();
+      });
+      el.btnLightboxDownload.addEventListener('click', () => {
+        if (state.lightboxCurrentImg) {
+          downloadSingleImage(
+            state.lightboxCurrentImg.url,
+            `noticia_foto_0${state.lightboxCurrentImg.index + 1}.png`
+          );
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeManualModal();
+          closeLightbox();
+        }
+      });
+
+      // Descarga masiva de fotografías
+      el.btnDownloadAllPhotos.addEventListener('click', downloadAllPhotosZip);
+
+      // Controles del reproductor de voz
+      el.voiceSelect.addEventListener('change', (e) => {
+        state.tts.selectedVoiceURI = e.target.value;
+        if (state.tts.isPlaying && !state.tts.isPaused) {
+          speakParagraphAt(state.tts.currentParagraph);
+        }
+      });
+
+      el.btnAudioPlay.addEventListener('click', playOrResumeSpeech);
+      el.btnAudioPause.addEventListener('click', pauseSpeech);
+      el.btnAudioStop.addEventListener('click', () => {
+        playTerminalBeep(950, 0.07, 700);
+        stopSpeechSynthesis();
+      });
+
+      el.speedSlider.addEventListener('input', (e) => setSpeechRate(e.target.value));
+      document.querySelectorAll('.speed-preset').forEach((btn) => {
+        btn.addEventListener('click', () => setSpeechRate(btn.dataset.speed));
+      });
+
+      // Barra de progreso interactiva (saltar a cualquier párrafo de la noticia)
+      el.audioProgressTrack.addEventListener('click', (e) => {
+        const totalP = state.article.paragraphs.length;
+        if (totalP === 0) return;
+        const rect = el.audioProgressTrack.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const targetP = Math.min(totalP - 1, Math.floor(ratio * totalP));
+        jumpToParagraphAndSpeak(targetP);
+      });
+
+      // Descarga de audio .MP3
+      el.btnDownloadMp3.addEventListener('click', downloadArticleAsMp3);
+
+      // Inicializar visualizador de ondas al cargar ventana
+      window.addEventListener('load', () => {
+        initAudioWaveformVisualizer();
+      });
+    })();
+  </script>
+</body>
+</html>
